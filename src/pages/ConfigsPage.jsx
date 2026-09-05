@@ -28,6 +28,19 @@ const MODE_OPTIONS = ['rule', 'global', 'direct']
 const LOG_LEVEL_OPTIONS = ['debug', 'info', 'warning', 'error', 'silent']
 const READONLY_NUMERIC_FIELDS = ['port', 'socks-port', 'redir-port', 'tproxy-port', 'mixed-port']
 
+// The controller's Clash API can report enum-ish fields (e.g. `mode`) with
+// different casing than the lowercase values these <Select>s use as their
+// <MenuItem> values (sing-box has returned "Rule" rather than "rule" on some
+// versions). Map whatever comes back onto the option list case-insensitively
+// so the Select never receives a value with no matching MenuItem — MUI logs
+// an "out-of-range value" warning in that case, and, worse, renders the
+// select as blank instead of showing the actual current mode.
+function normalizeToOption(value, options) {
+  if (value === undefined || value === null) return ''
+  const match = options.find((o) => o.toLowerCase() === String(value).toLowerCase())
+  return match ?? ''
+}
+
 export default function ConfigsPage() {
   const { settings, secretReady } = useSettings()
   const { data, loading, error, refresh } = useClashResource(clashApi.getConfigs, settings, {
@@ -111,7 +124,11 @@ export default function ConfigsPage() {
               </Typography>
               <Stack spacing={2}>
                 {'mode' in data && (
-                  <Select size="small" value={data.mode} onChange={(e) => patch('mode', e.target.value)}>
+                  <Select
+                    size="small"
+                    value={normalizeToOption(data.mode, MODE_OPTIONS)}
+                    onChange={(e) => patch('mode', e.target.value)}
+                  >
                     {MODE_OPTIONS.map((m) => (
                       <MenuItem key={m} value={m}>
                         {m}
@@ -122,7 +139,7 @@ export default function ConfigsPage() {
                 {'log-level' in data && (
                   <Select
                     size="small"
-                    value={data['log-level']}
+                    value={normalizeToOption(data['log-level'], LOG_LEVEL_OPTIONS)}
                     onChange={(e) => patch('log-level', e.target.value)}
                   >
                     {LOG_LEVEL_OPTIONS.map((l) => (

@@ -4,6 +4,22 @@ import { usePageVisibility } from './usePageVisibility'
 const BASE_RECONNECT_DELAY_MS = 1000
 const MAX_RECONNECT_DELAY_MS = 15000
 
+// Closing a socket while it's still CONNECTING is what makes Chrome log
+// "WebSocket is closed before the connection is established" — harmless,
+// but noisy, and it fires on every unmount/route change/dependency change
+// (including React StrictMode's intentional dev-mode double-invoke of
+// effects). Deferring the close until the socket actually reaches OPEN
+// (or just dropping it if it never does, e.g. it errors out first) avoids
+// the warning entirely without changing any observable behavior.
+function closeSocket(socket) {
+  if (!socket) return
+  if (socket.readyState === WebSocket.CONNECTING) {
+    socket.addEventListener('open', () => socket.close())
+  } else {
+    socket.close()
+  }
+}
+
 /**
  * Subscribes to one of sing-box's streaming Clash API endpoints
  * (/logs, /traffic, /memory), each of which pushes newline-delimited
@@ -98,7 +114,7 @@ export function useClashWebSocket(url, { maxItems = 200, pauseWhenHidden = false
     return () => {
       cancelled = true
       clearTimeout(reconnectTimer)
-      socket?.close()
+      closeSocket(socket)
       socketRef.current = null
       attemptRef.current = 0
     }
