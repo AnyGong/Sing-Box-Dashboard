@@ -6,14 +6,17 @@ import { usePageVisibility } from './usePageVisibility'
 const PROBE_INTERVAL_MS = 10000
 
 export function useConnectionStatus() {
-  const { settings } = useSettings()
+  const { settings, secretReady } = useSettings()
   const { baseUrl, secret } = settings
   const [status, setStatus] = useState('connecting')
   const [version, setVersion] = useState(null)
   const visible = usePageVisibility()
 
   useEffect(() => {
-    if (!visible) return undefined
+    // Wait for the encrypted secret to finish loading from IndexedDB before
+    // probing — otherwise this fires once with secret === '' and gets a
+    // spurious 401 from any controller that has a secret configured.
+    if (!visible || !secretReady) return undefined
     let cancelled = false
     const controller = new AbortController()
     setStatus('connecting')
@@ -36,7 +39,7 @@ export function useConnectionStatus() {
       controller.abort()
       clearInterval(id)
     }
-  }, [baseUrl, secret, visible])
+  }, [baseUrl, secret, visible, secretReady])
 
   return { status, version }
 }

@@ -35,8 +35,12 @@ const StatCard = memo(function StatCard({ label, value, sub }) {
 // dedicated Traffic page) since this is a small decorative ticker nobody
 // is watching while the tab is in the background.
 function TrafficPanel() {
-  const { settings } = useSettings()
-  const trafficUrl = wsUrl(settings, '/traffic')
+  const { settings, secretReady } = useSettings()
+  // Hold off building the URL (and thus opening the socket) until the
+  // encrypted secret has finished loading — otherwise the first connection
+  // attempt goes out with no `?token=`, gets rejected, and immediately
+  // reconnects once the real secret resolves a moment later.
+  const trafficUrl = secretReady ? wsUrl(settings, '/traffic') : null
   const { items: trafficItems, status: trafficStatus } = useClashWebSocket(trafficUrl, {
     maxItems: 60,
     pauseWhenHidden: true,
@@ -93,11 +97,23 @@ function TrafficPanel() {
 }
 
 export default function DashboardPage() {
-  const { settings } = useSettings()
-  const { data: version } = useClashResource(clashApi.getVersion, settings, { intervalMs: 30000 })
-  const { data: proxies } = useClashResource(clashApi.getProxies, settings, { intervalMs: 15000 })
-  const { data: connections } = useClashResource(clashApi.getConnections, settings, { intervalMs: 5000 })
-  const { data: rules } = useClashResource(clashApi.getRules, settings, { intervalMs: 30000 })
+  const { settings, secretReady } = useSettings()
+  const { data: version } = useClashResource(clashApi.getVersion, settings, {
+    intervalMs: 30000,
+    enabled: secretReady,
+  })
+  const { data: proxies } = useClashResource(clashApi.getProxies, settings, {
+    intervalMs: 15000,
+    enabled: secretReady,
+  })
+  const { data: connections } = useClashResource(clashApi.getConnections, settings, {
+    intervalMs: 5000,
+    enabled: secretReady,
+  })
+  const { data: rules } = useClashResource(clashApi.getRules, settings, {
+    intervalMs: 30000,
+    enabled: secretReady,
+  })
 
   const proxyCount = proxies ? Object.keys(proxies.proxies || {}).length : '—'
   const connCount = connections ? (connections.connections || []).length : '—'

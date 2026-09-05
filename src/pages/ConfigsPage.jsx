@@ -29,8 +29,10 @@ const LOG_LEVEL_OPTIONS = ['debug', 'info', 'warning', 'error', 'silent']
 const READONLY_NUMERIC_FIELDS = ['port', 'socks-port', 'redir-port', 'tproxy-port', 'mixed-port']
 
 export default function ConfigsPage() {
-  const { settings } = useSettings()
-  const { data, loading, error, refresh } = useClashResource(clashApi.getConfigs, settings)
+  const { settings, secretReady } = useSettings()
+  const { data, loading, error, refresh } = useClashResource(clashApi.getConfigs, settings, {
+    enabled: secretReady,
+  })
   const [toast, setToast] = useState(null)
   const [reloadPath, setReloadPath] = useState('')
   const [force, setForce] = useState(false)

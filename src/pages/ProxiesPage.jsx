@@ -12,8 +12,10 @@ import { monoFont } from '../theme'
 const GROUP_TYPES = new Set(['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay'])
 
 export default function ProxiesPage() {
-  const { settings } = useSettings()
-  const { data, loading, error, refresh } = useClashResource(clashApi.getProxies, settings)
+  const { settings, secretReady } = useSettings()
+  const { data, loading, error, refresh } = useClashResource(clashApi.getProxies, settings, {
+    enabled: secretReady,
+  })
 
   const { groups, leaves } = useMemo(() => {
     const all = data?.proxies || {}

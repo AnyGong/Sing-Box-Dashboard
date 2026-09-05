@@ -28,13 +28,13 @@ const LEVEL_COLOR = {
 }
 
 export default function LogsPage() {
-  const { settings } = useSettings()
+  const { settings, secretReady } = useSettings()
   const [level, setLevel] = useState('info')
   const [paused, setPaused] = useState(false)
   const [autoScroll, setAutoScroll] = useState(true)
   const bottomRef = useRef(null)
 
-  const url = paused ? null : wsUrl(settings, '/logs', { level })
+  const url = paused || !secretReady ? null : wsUrl(settings, '/logs', { level })
   const { items, status, clear } = useClashWebSocket(url, { maxItems: 500 })
 
   useEffect(() => {

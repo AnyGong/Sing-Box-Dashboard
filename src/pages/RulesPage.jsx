@@ -22,8 +22,10 @@ import { clashApi } from '../api/clashClient'
 import { monoFont } from '../theme'
 
 export default function RulesPage() {
-  const { settings } = useSettings()
-  const { data, loading, error, refresh } = useClashResource(clashApi.getRules, settings)
+  const { settings, secretReady } = useSettings()
+  const { data, loading, error, refresh } = useClashResource(clashApi.getRules, settings, {
+    enabled: secretReady,
+  })
   const [filter, setFilter] = useState('')
   const deferredFilter = useDeferredValue(filter)
 

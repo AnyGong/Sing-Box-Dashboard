@@ -155,10 +155,10 @@ function RuleProvidersTable({ providers, onRefresh }) {
 }
 
 export default function ProvidersPage() {
-  const { settings } = useSettings()
+  const { settings, secretReady } = useSettings()
   const [tab, setTab] = useState(0)
-  const proxyRes = useClashResource(clashApi.getProxyProviders, settings)
-  const ruleRes = useClashResource(clashApi.getRuleProviders, settings)
+  const proxyRes = useClashResource(clashApi.getProxyProviders, settings, { enabled: secretReady })
+  const ruleRes = useClashResource(clashApi.getRuleProviders, settings, { enabled: secretReady })
 
   const active = tab === 0 ? proxyRes : ruleRes
 

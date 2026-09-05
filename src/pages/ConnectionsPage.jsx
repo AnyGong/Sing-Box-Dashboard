@@ -28,9 +28,10 @@ import { formatBytes, safeConnStarted } from '../utils/format'
 import { monoFont } from '../theme'
 
 export default function ConnectionsPage() {
-  const { settings } = useSettings()
+  const { settings, secretReady } = useSettings()
   const { data, loading, error, refresh } = useClashResource(clashApi.getConnections, settings, {
     intervalMs: 3000,
+    enabled: secretReady,
   })
   const [filter, setFilter] = useState('')
   const [closing, setClosing] = useState({})

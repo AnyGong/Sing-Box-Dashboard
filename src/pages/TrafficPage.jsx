@@ -9,9 +9,9 @@ import { formatBytes, formatBytesPerSec } from '../utils/format'
 import { monoFont } from '../theme'
 
 export default function TrafficPage() {
-  const { settings } = useSettings()
+  const { settings, secretReady } = useSettings()
   const [paused, setPaused] = useState(false)
-  const url = paused ? null : wsUrl(settings, '/traffic')
+  const url = paused || !secretReady ? null : wsUrl(settings, '/traffic')
   const { items, status, clear } = useClashWebSocket(url, { maxItems: 300 })
 
   const latest = items[items.length - 1]?.data
