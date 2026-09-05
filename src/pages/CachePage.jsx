@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { Paper, Stack, Typography, Button, Alert } from '@mui/material'
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweepOutlined'
 import PageHeader from '../components/Common/PageHeader'
+import ConfirmDialog from '../components/Common/ConfirmDialog'
 import { useSettings } from '../context/SettingsContext'
 import { clashApi, ClashApiError } from '../api/clashClient'
 
 export default function CachePage() {
   const { settings } = useSettings()
   const [state, setState] = useState({ status: 'idle' })
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const flush = async () => {
     setState({ status: 'busy' })
@@ -22,6 +24,8 @@ export default function CachePage() {
             ? `${err.status}: ${err.message}`
             : 'Request failed — check the connection settings.',
       })
+    } finally {
+      setConfirmOpen(false)
     }
   }
 
@@ -46,7 +50,7 @@ export default function CachePage() {
             variant="outlined"
             color="warning"
             startIcon={<DeleteSweepIcon />}
-            onClick={flush}
+            onClick={() => setConfirmOpen(true)}
             disabled={state.status === 'busy'}
           >
             Flush fake-IP cache
@@ -63,6 +67,17 @@ export default function CachePage() {
           </Alert>
         )}
       </Paper>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Flush fake-IP cache?"
+        description="Any client mid-session on a fake-IP address will need to re-resolve it. This can briefly interrupt in-progress connections that rely on the fakeip mapping."
+        confirmLabel="Flush cache"
+        confirmColor="warning"
+        busy={state.status === 'busy'}
+        onConfirm={flush}
+        onClose={() => setConfirmOpen(false)}
+      />
     </>
   )
 }

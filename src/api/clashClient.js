@@ -39,12 +39,27 @@ async function request(conn, path, { method = 'GET', query, body, signal } = {})
     // cache participant — always get the live state.
     cache: 'no-store',
   })
+
+  if (res.ok) {
+    // Parse straight off the response stream instead of res.text() +
+    // JSON.parse() — avoids materializing an extra intermediate string for
+    // the largest, most frequently-polled payloads (/connections, /rules).
+    // A handful of successful responses (some POST/PUT actions) have no
+    // body at all, which res.json() can't parse — treat that as `null`
+    // rather than an error.
+    try {
+      return await res.json()
+    } catch {
+      return null
+    }
+  }
+
+  // Error bodies are small and not guaranteed to be JSON (a reverse proxy's
+  // plain-text error page, an empty body, etc.), so read them as text first
+  // and parse leniently rather than risk throwing on the parse itself.
   const text = await res.text()
   const data = text ? safeJson(text) : null
-  if (!res.ok) {
-    throw new ClashApiError(data?.message || res.statusText, res.status, data)
-  }
-  return data
+  throw new ClashApiError(data?.message || res.statusText, res.status, data)
 }
 
 function safeJson(text) {

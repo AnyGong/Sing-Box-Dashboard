@@ -21,6 +21,7 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweepOutlined'
 import SearchIcon from '@mui/icons-material/SearchOutlined'
 import PageHeader from '../components/Common/PageHeader'
 import { LoadingBlock, ErrorBlock, EmptyBlock } from '../components/Common/StateBlocks'
+import ConfirmDialog from '../components/Common/ConfirmDialog'
 import { useSettings } from '../context/SettingsContext'
 import { useClashResource } from '../hooks/useClashResource'
 import { clashApi } from '../api/clashClient'
@@ -35,6 +36,8 @@ export default function ConnectionsPage() {
   })
   const [filter, setFilter] = useState('')
   const [closing, setClosing] = useState({})
+  const [closeAllOpen, setCloseAllOpen] = useState(false)
+  const [closingAll, setClosingAll] = useState(false)
   // The filter text itself updates immediately (input stays responsive);
   // the expensive re-filter of a potentially large connection list is
   // deferred so React can keep rendering keystrokes at full priority and
@@ -67,8 +70,14 @@ export default function ConnectionsPage() {
   }
 
   const closeAll = async () => {
-    await clashApi.closeAllConnections(settings)
-    refresh()
+    setClosingAll(true)
+    try {
+      await clashApi.closeAllConnections(settings)
+      refresh()
+    } finally {
+      setClosingAll(false)
+      setCloseAllOpen(false)
+    }
   }
 
   return (
@@ -86,7 +95,7 @@ export default function ConnectionsPage() {
               color="error"
               variant="outlined"
               size="small"
-              onClick={closeAll}
+              onClick={() => setCloseAllOpen(true)}
               disabled={!connections.length}
             >
               Close all
@@ -173,6 +182,18 @@ export default function ConnectionsPage() {
           </Table>
         </TableContainer>
       )}
+
+      <ConfirmDialog
+        open={closeAllOpen}
+        title="Close all connections?"
+        description={`This will immediately terminate all ${connections.length} tracked connection${
+          connections.length === 1 ? '' : 's'
+        }. Anything mid-transfer will be cut off and may need to reconnect.`}
+        confirmLabel="Close all"
+        busy={closingAll}
+        onConfirm={closeAll}
+        onClose={() => setCloseAllOpen(false)}
+      />
     </>
   )
 }

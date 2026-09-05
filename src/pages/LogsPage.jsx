@@ -96,6 +96,13 @@ export default function LogsPage() {
                 py: 0.4,
                 borderBottom: '1px solid',
                 borderColor: 'divider',
+                // Same technique already used for the Connections/Rules/
+                // Providers tables: rows scrolled out of view skip layout/
+                // style/paint entirely. Matters more here than anywhere
+                // else in the app — up to 500 lines re-rendering on every
+                // incoming message during high-volume debug logging.
+                contentVisibility: 'auto',
+                containIntrinsicSize: 'auto 24px',
               }}
             >
               <Typography component="span" variant="caption" sx={{ color: 'text.secondary', flexShrink: 0 }}>

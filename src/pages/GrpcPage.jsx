@@ -91,7 +91,15 @@ export default function GrpcPage() {
       })
       const text = await res.text()
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${text}`)
-      setGatewayResult(text)
+      // grpc-gateway responses are JSON; pretty-print when it parses so the
+      // (often nested) stats payload is actually scannable instead of one
+      // dense line, while still falling back to the raw text for anything
+      // that isn't valid JSON.
+      try {
+        setGatewayResult(JSON.stringify(JSON.parse(text), null, 2))
+      } catch {
+        setGatewayResult(text)
+      }
     } catch (err) {
       setGatewayError(err.message)
     } finally {

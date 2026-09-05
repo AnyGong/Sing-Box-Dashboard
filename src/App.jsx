@@ -1,51 +1,73 @@
+import { lazy, Suspense } from 'react'
 import { CssVarsProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Box, CircularProgress } from '@mui/material'
 import { theme } from './theme'
 import { SettingsProvider } from './context/SettingsContext'
+import { ConnectionStatusProvider } from './context/ConnectionStatusContext'
 import AppShell from './components/Layout/AppShell'
+import ErrorBoundary from './components/Common/ErrorBoundary'
 
-import DashboardPage from './pages/DashboardPage'
-import ProxiesPage from './pages/ProxiesPage'
-import ConnectionsPage from './pages/ConnectionsPage'
-import RulesPage from './pages/RulesPage'
-import ProvidersPage from './pages/ProvidersPage'
-import LogsPage from './pages/LogsPage'
-import TrafficPage from './pages/TrafficPage'
-import MemoryPage from './pages/MemoryPage'
-import DnsPage from './pages/DnsPage'
-import CachePage from './pages/CachePage'
-import ConfigsPage from './pages/ConfigsPage'
-import GrpcPage from './pages/GrpcPage'
-import SettingsPage from './pages/SettingsPage'
-import NotFoundPage from './pages/NotFoundPage'
+// Each page is its own chunk instead of one ~750KB bundle: @mui/x-charts
+// (only used by Dashboard/Traffic/Memory) and every other page's code no
+// longer has to download before someone who only ever opens Settings sees
+// anything.
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const ProxiesPage = lazy(() => import('./pages/ProxiesPage'))
+const ConnectionsPage = lazy(() => import('./pages/ConnectionsPage'))
+const RulesPage = lazy(() => import('./pages/RulesPage'))
+const ProvidersPage = lazy(() => import('./pages/ProvidersPage'))
+const LogsPage = lazy(() => import('./pages/LogsPage'))
+const TrafficPage = lazy(() => import('./pages/TrafficPage'))
+const MemoryPage = lazy(() => import('./pages/MemoryPage'))
+const DnsPage = lazy(() => import('./pages/DnsPage'))
+const CachePage = lazy(() => import('./pages/CachePage'))
+const ConfigsPage = lazy(() => import('./pages/ConfigsPage'))
+const GrpcPage = lazy(() => import('./pages/GrpcPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+
+function RouteFallback() {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+      <CircularProgress size={28} />
+    </Box>
+  )
+}
 
 export default function App() {
   return (
     <CssVarsProvider theme={theme} defaultMode="system">
       <CssBaseline />
-      <SettingsProvider>
-        <BrowserRouter>
-          <AppShell>
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/proxies" element={<ProxiesPage />} />
-              <Route path="/connections" element={<ConnectionsPage />} />
-              <Route path="/rules" element={<RulesPage />} />
-              <Route path="/providers" element={<ProvidersPage />} />
-              <Route path="/logs" element={<LogsPage />} />
-              <Route path="/traffic" element={<TrafficPage />} />
-              <Route path="/memory" element={<MemoryPage />} />
-              <Route path="/dns" element={<DnsPage />} />
-              <Route path="/cache" element={<CachePage />} />
-              <Route path="/configs" element={<ConfigsPage />} />
-              <Route path="/grpc" element={<GrpcPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </AppShell>
-        </BrowserRouter>
-      </SettingsProvider>
+      <ErrorBoundary>
+        <SettingsProvider>
+          <ConnectionStatusProvider>
+            <BrowserRouter>
+              <AppShell>
+                <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/proxies" element={<ProxiesPage />} />
+                    <Route path="/connections" element={<ConnectionsPage />} />
+                    <Route path="/rules" element={<RulesPage />} />
+                    <Route path="/providers" element={<ProvidersPage />} />
+                    <Route path="/logs" element={<LogsPage />} />
+                    <Route path="/traffic" element={<TrafficPage />} />
+                    <Route path="/memory" element={<MemoryPage />} />
+                    <Route path="/dns" element={<DnsPage />} />
+                    <Route path="/cache" element={<CachePage />} />
+                    <Route path="/configs" element={<ConfigsPage />} />
+                    <Route path="/grpc" element={<GrpcPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+                </Suspense>
+              </AppShell>
+            </BrowserRouter>
+          </ConnectionStatusProvider>
+        </SettingsProvider>
+      </ErrorBoundary>
     </CssVarsProvider>
   )
 }

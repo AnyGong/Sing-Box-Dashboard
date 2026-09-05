@@ -157,8 +157,12 @@ function RuleProvidersTable({ providers, onRefresh }) {
 export default function ProvidersPage() {
   const { settings, secretReady } = useSettings()
   const [tab, setTab] = useState(0)
-  const proxyRes = useClashResource(clashApi.getProxyProviders, settings, { enabled: secretReady })
-  const ruleRes = useClashResource(clashApi.getRuleProviders, settings, { enabled: secretReady })
+  // Each tab's request is gated on secretReady *and* being the visible tab —
+  // previously both proxy and rule providers were fetched on every mount
+  // regardless of which tab was open, doubling the initial request count
+  // for no benefit (the inactive tab's table isn't rendered anyway).
+  const proxyRes = useClashResource(clashApi.getProxyProviders, settings, { enabled: secretReady && tab === 0 })
+  const ruleRes = useClashResource(clashApi.getRuleProviders, settings, { enabled: secretReady && tab === 1 })
 
   const active = tab === 0 ? proxyRes : ruleRes
 

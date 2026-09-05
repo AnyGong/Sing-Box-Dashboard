@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Paper, Stack, Chip, Button, Grid, Typography } from '@mui/material'
 import { LineChart } from '@mui/x-charts/LineChart'
 import PageHeader from '../components/Common/PageHeader'
@@ -14,9 +14,41 @@ export default function TrafficPage() {
   const url = paused || !secretReady ? null : wsUrl(settings, '/traffic')
   const { items, status, clear } = useClashWebSocket(url, { maxItems: 300 })
 
+  // `items` is capped at maxItems (~5 min of samples at 1/sec) so the chart
+  // stays cheap to render — older samples silently fall out of the array.
+  // Summing `items` directly for a "session" total is therefore wrong for
+  // any session longer than the cap (it quietly becomes a "last 5 minutes"
+  // total). Track the running total separately: each render, add whatever
+  // sample is newest — identified by its timestamp, not array position —
+  // exactly once, independent of how much of the display buffer gets
+  // trimmed.
+  const [sessionTotals, setSessionTotals] = useState({ up: 0, down: 0 })
+  const lastCountedAtRef = useRef(0)
+
+  useEffect(() => {
+    const last = items[items.length - 1]
+    if (last && last.at > lastCountedAtRef.current) {
+      lastCountedAtRef.current = last.at
+      setSessionTotals((t) => ({
+        up: t.up + (last.data?.up || 0),
+        down: t.down + (last.data?.down || 0),
+      }))
+    }
+  }, [items])
+
+  // A different controller/secret makes any accumulated total meaningless.
+  useEffect(() => {
+    lastCountedAtRef.current = 0
+    setSessionTotals({ up: 0, down: 0 })
+  }, [url])
+
+  const resetSession = () => {
+    lastCountedAtRef.current = 0
+    setSessionTotals({ up: 0, down: 0 })
+    clear()
+  }
+
   const latest = items[items.length - 1]?.data
-  const totalUp = items.reduce((acc, i) => acc + (i.data?.up || 0), 0)
-  const totalDown = items.reduce((acc, i) => acc + (i.data?.down || 0), 0)
 
   const up = items.map((i) => i.data?.up ?? 0)
   const down = items.map((i) => i.data?.down ?? 0)
@@ -33,7 +65,7 @@ export default function TrafficPage() {
             <Button size="small" variant="outlined" onClick={() => setPaused((p) => !p)}>
               {paused ? 'Resume' : 'Pause'}
             </Button>
-            <Button size="small" variant="outlined" onClick={clear}>
+            <Button size="small" variant="outlined" onClick={resetSession}>
               Clear
             </Button>
           </Stack>
@@ -67,7 +99,7 @@ export default function TrafficPage() {
               Session upload
             </Typography>
             <Typography variant="h5" sx={{ fontFamily: monoFont, fontWeight: 700 }}>
-              {formatBytes(totalUp)}
+              {formatBytes(sessionTotals.up)}
             </Typography>
           </Paper>
         </Grid>
@@ -77,7 +109,7 @@ export default function TrafficPage() {
               Session download
             </Typography>
             <Typography variant="h5" sx={{ fontFamily: monoFont, fontWeight: 700 }}>
-              {formatBytes(totalDown)}
+              {formatBytes(sessionTotals.down)}
             </Typography>
           </Paper>
         </Grid>

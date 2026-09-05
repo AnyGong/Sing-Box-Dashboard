@@ -30,7 +30,14 @@ export default function RulesPage() {
   const deferredFilter = useDeferredValue(filter)
 
   const rules = useMemo(() => {
-    const list = data?.rules || []
+    // Keep each rule's position in the *unfiltered* list attached before
+    // filtering. It's used both as a stable React key (so filtering doesn't
+    // reassign keys — and therefore identity — to different rules mid-type,
+    // which was defeating reconciliation and could mismatch the
+    // content-visibility sizing hints against the wrong row) and as the "#"
+    // column, so it keeps showing each rule's real evaluation order instead
+    // of its position within the current filter results.
+    const list = (data?.rules || []).map((r, originalIndex) => ({ ...r, originalIndex }))
     if (!deferredFilter) return list
     const needle = deferredFilter.toLowerCase()
     return list.filter(
@@ -84,13 +91,13 @@ export default function RulesPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {rules.map((r, idx) => (
+              {rules.map((r) => (
                 <TableRow
-                  key={idx}
+                  key={r.originalIndex}
                   hover
                   sx={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' }}
                 >
-                  <TableCell sx={{ color: 'text.secondary' }}>{idx + 1}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary' }}>{r.originalIndex + 1}</TableCell>
                   <TableCell>
                     <Chip size="small" variant="outlined" label={r.type} />
                   </TableCell>

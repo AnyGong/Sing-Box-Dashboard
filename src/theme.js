@@ -43,8 +43,15 @@ export const theme = extendTheme({
     },
   },
   typography: {
-    fontFamily:
-      '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif',
+    // "Inter" was referenced here previously but never actually loaded —
+    // no <link>/@font-face and no font files ship with the app — so every
+    // browser was silently falling back past it anyway. Rather than pull
+    // in a Google Fonts request (this is meant to be a tool that only ever
+    // talks to a local `external_controller`, so calling out to a third-
+    // party CDN for a typeface is the wrong trade-off) or bundle font
+    // files, just declare the fallback stack the browser was already
+    // rendering with.
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
     h1: { fontFamily: 'inherit', fontWeight: 700 },
     h2: { fontFamily: 'inherit', fontWeight: 700 },
     h3: { fontFamily: 'inherit', fontWeight: 600 },
@@ -79,7 +86,8 @@ export const theme = extendTheme({
 })
 
 // Shared monospace stack for numeric / protocol data (bytes, ms, IDs, JSON).
-export const monoFont =
-  '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace'
+// Same reasoning as above: "JetBrains Mono" was never loaded, so this is the
+// stack every browser was already falling back to — named explicitly.
+export const monoFont = 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace'
 
 export const signalColors = { SIGNAL, SIGNAL_DARK, AMBER, CRIMSON }

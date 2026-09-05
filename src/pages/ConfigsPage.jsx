@@ -18,6 +18,7 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh'
 import PageHeader from '../components/Common/PageHeader'
 import { LoadingBlock, ErrorBlock } from '../components/Common/StateBlocks'
+import ConfirmDialog from '../components/Common/ConfirmDialog'
 import { useSettings } from '../context/SettingsContext'
 import { useClashResource } from '../hooks/useClashResource'
 import { clashApi } from '../api/clashClient'
@@ -50,6 +51,7 @@ export default function ConfigsPage() {
   const [reloadPath, setReloadPath] = useState('')
   const [force, setForce] = useState(false)
   const [reloading, setReloading] = useState(false)
+  const [reloadConfirmOpen, setReloadConfirmOpen] = useState(false)
 
   const patch = async (key, value) => {
     try {
@@ -71,6 +73,18 @@ export default function ConfigsPage() {
       setToast({ severity: 'error', message: `Reload failed: ${err.message}` })
     } finally {
       setReloading(false)
+      setReloadConfirmOpen(false)
+    }
+  }
+
+  // A plain reload just re-reads the config file — low-risk. "Force" is the
+  // one that drops every in-flight connection, so that's the case worth an
+  // extra step before it fires.
+  const handleReloadClick = () => {
+    if (force) {
+      setReloadConfirmOpen(true)
+    } else {
+      doReload()
     }
   }
 
@@ -192,7 +206,12 @@ export default function ConfigsPage() {
                   control={<Checkbox checked={force} onChange={(e) => setForce(e.target.checked)} />}
                   label="Force (discard in-flight connections)"
                 />
-                <Button variant="contained" onClick={doReload} disabled={reloading} sx={{ alignSelf: 'flex-start' }}>
+                <Button
+                  variant="contained"
+                  onClick={handleReloadClick}
+                  disabled={reloading}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
                   Reload
                 </Button>
               </Stack>
@@ -200,6 +219,16 @@ export default function ConfigsPage() {
           </Grid>
         </Grid>
       )}
+
+      <ConfirmDialog
+        open={reloadConfirmOpen}
+        title="Force-reload configuration?"
+        description="Force reload discards every in-flight connection immediately when the new config takes effect. Anything mid-transfer will be cut off."
+        confirmLabel="Force reload"
+        busy={reloading}
+        onConfirm={doReload}
+        onClose={() => setReloadConfirmOpen(false)}
+      />
 
       <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast(null)}>
         {toast ? <Alert severity={toast.severity}>{toast.message}</Alert> : undefined}

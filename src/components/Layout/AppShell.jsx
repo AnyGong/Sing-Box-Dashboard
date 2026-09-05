@@ -29,7 +29,7 @@ import DnsIcon from '@mui/icons-material/DnsOutlined'
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweepOutlined'
 import TuneIcon from '@mui/icons-material/TuneOutlined'
 import SettingsIcon from '@mui/icons-material/SettingsOutlined'
-import { useConnectionStatus } from '../../hooks/useConnectionStatus'
+import { useConnectionStatus } from '../../context/ConnectionStatusContext'
 
 const DRAWER_WIDTH = 248
 
@@ -160,9 +160,17 @@ export default function AppShell({ children }) {
           }}
           open
         >
-          <Toolbar sx={{ px: 2.5 }}>
-            <Divider />
+          {/* This sits beside the AppBar (which starts after DRAWER_WIDTH),
+              so without a brand mark here the top-left corner of the whole
+              app was just blank — this Toolbar previously rendered nothing
+              but a stray, non-functional <Divider/>. */}
+          <Toolbar sx={{ px: 2.5, gap: 1 }}>
+            <HubIcon fontSize="small" color="primary" />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              sing-box
+            </Typography>
           </Toolbar>
+          <Divider />
           {drawer}
         </Drawer>
       </Box>

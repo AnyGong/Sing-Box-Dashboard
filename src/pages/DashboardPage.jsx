@@ -3,6 +3,7 @@ import { Grid, Paper, Typography, Stack, Box, Chip } from '@mui/material'
 import { LineChart } from '@mui/x-charts/LineChart'
 import PageHeader from '../components/Common/PageHeader'
 import { useSettings } from '../context/SettingsContext'
+import { useConnectionStatus } from '../context/ConnectionStatusContext'
 import { useClashResource } from '../hooks/useClashResource'
 import { useClashWebSocket } from '../hooks/useClashWebSocket'
 import { clashApi, wsUrl } from '../api/clashClient'
@@ -98,10 +99,10 @@ function TrafficPanel() {
 
 export default function DashboardPage() {
   const { settings, secretReady } = useSettings()
-  const { data: version } = useClashResource(clashApi.getVersion, settings, {
-    intervalMs: 30000,
-    enabled: secretReady,
-  })
+  // Reuses the same app-wide /version probe the header's status chip is
+  // already running (see ConnectionStatusContext) instead of polling the
+  // same endpoint again on a separate interval.
+  const { version } = useConnectionStatus()
   const { data: proxies } = useClashResource(clashApi.getProxies, settings, {
     intervalMs: 15000,
     enabled: secretReady,

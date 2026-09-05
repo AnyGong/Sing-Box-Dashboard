@@ -75,7 +75,7 @@ export default function SettingsPage() {
             type={showSecret ? 'text' : 'password'}
             value={form.secret}
             onChange={(e) => setForm((f) => ({ ...f, secret: e.target.value }))}
-            helperText="Matches experimental.clash_api.secret, sent as a Bearer token."
+            helperText="Matches experimental.clash_api.secret, sent as a Bearer token over HTTP. Browsers can't set custom headers on a WebSocket handshake, so the Logs/Traffic/Memory streams instead send it as a ?token= query parameter — it will show up in the Network panel/URL bar for those requests."
             fullWidth
             InputProps={{
               endAdornment: (
