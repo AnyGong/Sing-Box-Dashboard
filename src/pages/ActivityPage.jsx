@@ -10,8 +10,11 @@ import {
     ToggleButton,
     ToggleButtonGroup,
     Divider,
+    Tooltip,
+    IconButton,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/RefreshOutlined'
+import InfoIcon from '@mui/icons-material/InfoOutlined'
 import { LineChart } from '@mui/x-charts/LineChart'
 import { BarChart } from '@mui/x-charts/BarChart'
 import PageHeader from '../components/Common/PageHeader'
@@ -257,13 +260,29 @@ function ActiveConnectionCard({ count }) {
 // that opens and fully closes between two 5s polls never contributes here,
 // so — like useDailyTraffic's daily tally — this is a live snapshot, not a
 // complete historical ledger.
+// Extract a human-readable process name from sing-box's full processPath.
+// The Clash API reports the complete executable path. For macOS .app bundles
+// the real application name lives in the "*.app" directory segment, not in
+// the Contents/MacOS/<binary> leaf (e.g. VS Code's binary is "Electron").
+// Windows/POSIX executables fall back to the last path segment.
+function extractProcessName(processPath) {
+    if (!processPath) return null
+    const normalized = processPath.replace(/\\/g, '/')
+    // macOS .app bundle: capture the name before ".app/"
+    const appMatch = normalized.match(/([^/]+)\.app\//i)
+    if (appMatch) return appMatch[1]
+    // Otherwise take the last path segment
+    const name = normalized.split('/').pop()
+    return name || null
+}
+
 const TRAFFIC_GROUP_KEY = {
     // sing-box's Clash API reports this field as `processPath`, not
     // `process` (confirmed against sing-box's own
     // experimental/clashapi/trafficontrol/tracker.go) — the previous
     // `c.metadata?.process` lookup here never matched anything and silently
     // fell through to host/IP on every connection.
-    client: (c) => c.metadata?.processPath || c.metadata?.host || c.metadata?.destinationIP,
+    client: (c) => extractProcessName(c.metadata?.processPath) || c.metadata?.host || c.metadata?.destinationIP,
     domain: (c) => c.metadata?.host || c.metadata?.destinationIP,
     // chains[0] is the outbound sing-box actually routed through (e.g.
     // "DIRECT", "REJECT", or a proxy/selector name) — the same field the
@@ -374,9 +393,7 @@ const TrafficCard = memo(function TrafficCard({ hourly, connections }) {
                                             {formatBytes(c.total)}
                                         </Typography>
                                     </Stack>
-                                    <Box sx={{ height: 4, borderRadius: 1, bgcolor: 'action.hover', overflow: 'hidden' }}>
-                                        <Box sx={{ height: '100%', width: `${(c.total / max) * 100}%`, bgcolor: 'action.selected' }} />
-                                    </Box>
+                                    <Box sx={{ height: 4, borderRadius: 1, width: `${(c.total / max) * 100}%`, bgcolor: 'action.selected' }} />
                                 </Box>
                             </Stack>
                         ) : (
@@ -431,9 +448,16 @@ function TotalTrafficCard({ total }) {
     return (
         <Paper variant="outlined" sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 0.02, flexShrink: 0 }}>
-                    TOTAL TRAFFIC
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 0.02, flexShrink: 0 }}>
+                        TOTAL TRAFFIC
+                    </Typography>
+                    <Tooltip title="Since sing-box was last started" arrow placement="top">
+                        <IconButton size="small" sx={{ p: 0.25 }}>
+                            <InfoIcon fontSize="small" sx={{ fontSize: 16, color: 'text.secondary' }} />
+                        </IconButton>
+                    </Tooltip>
+                </Stack>
                 <ToggleButtonGroup
                     size="small"
                     exclusive
@@ -464,11 +488,6 @@ function TotalTrafficCard({ total }) {
                             card did before). It resets when sing-box
                             restarts rather than at local midnight, so the
                             toggle reads TOTAL rather than TODAY. */}
-                        {range === 'today' && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-                                Since sing-box was last started
-                            </Typography>
-                        )}
                     </Box>
                 )
             })()}
