@@ -89,7 +89,14 @@ export default function ProxyGroupCard({ group, allProxies, onChanged, defaultEx
 
   return (
     <Accordion defaultExpanded={defaultExpanded} variant="outlined" disableGutters>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+      {/* AccordionSummary renders as a real <button> (via ButtonBase) by
+          default. It contains a "test all" IconButton — also a real
+          <button> — which produces React's "<button> cannot appear as a
+          descendant of <button>" DOM-nesting warning. Rendering the summary
+          as a <div> instead keeps all of ButtonBase's click/keyboard/focus
+          behavior (it adds role="button" + tabIndex automatically for
+          non-button components) while avoiding the invalid nesting. */}
+      <AccordionSummary component="div" expandIcon={<ExpandMoreIcon />}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%', pr: 1 }}>
           <Typography sx={{ fontWeight: 700 }}>{group.name}</Typography>
           <Chip size="small" label={group.type} variant="outlined" />
