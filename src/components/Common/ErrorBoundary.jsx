@@ -1,5 +1,5 @@
 import { Component } from 'react'
-import { Box, Typography, Button, Paper } from '@mui/material'
+import { Box, Typography, Button, Stack, Paper } from '@mui/material'
 
 // Nothing above this in the tree catches render-time exceptions, so without
 // it a bug in any single page (a bad API response shape, a null deref,
@@ -17,8 +17,19 @@ export default class ErrorBoundary extends Component {
     console.error('Unhandled error in the control panel UI:', error, info)
   }
 
+  // Just clears the boundary's own state and re-renders the same subtree —
+  // useful for a genuinely transient error (a one-off race, a blip in
+  // freshly-fetched data), but for a deterministic bug (bad response shape,
+  // null deref) the exact same state that caused the crash is still there,
+  // so this will usually throw again immediately. Keeping it as a first,
+  // low-cost attempt — "Reload" below is the reliable fallback since a full
+  // navigation discards all state instead of only this boundary's.
   handleReset = () => {
     this.setState({ error: null })
+  }
+
+  handleReload = () => {
+    window.location.reload()
   }
 
   render() {
@@ -33,9 +44,14 @@ export default class ErrorBoundary extends Component {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             {error?.message || 'An unexpected error occurred while rendering the control panel.'}
           </Typography>
-          <Button variant="contained" onClick={this.handleReset}>
-            Try again
-          </Button>
+          <Stack direction="row" spacing={1.5} justifyContent="center">
+            <Button variant="outlined" onClick={this.handleReset}>
+              Try again
+            </Button>
+            <Button variant="contained" onClick={this.handleReload}>
+              Reload
+            </Button>
+          </Stack>
         </Paper>
       </Box>
     )
