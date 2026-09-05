@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import {
   Table,
   TableHead,
@@ -25,18 +25,19 @@ export default function RulesPage() {
   const { settings } = useSettings()
   const { data, loading, error, refresh } = useClashResource(clashApi.getRules, settings)
   const [filter, setFilter] = useState('')
+  const deferredFilter = useDeferredValue(filter)
 
   const rules = useMemo(() => {
     const list = data?.rules || []
-    if (!filter) return list
-    const needle = filter.toLowerCase()
+    if (!deferredFilter) return list
+    const needle = deferredFilter.toLowerCase()
     return list.filter(
       (r) =>
         r.type?.toLowerCase().includes(needle) ||
         r.payload?.toLowerCase().includes(needle) ||
         r.proxy?.toLowerCase().includes(needle),
     )
-  }, [data, filter])
+  }, [data, deferredFilter])
 
   return (
     <>
@@ -82,7 +83,11 @@ export default function RulesPage() {
             </TableHead>
             <TableBody>
               {rules.map((r, idx) => (
-                <TableRow key={idx} hover>
+                <TableRow
+                  key={idx}
+                  hover
+                  sx={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 33px' }}
+                >
                   <TableCell sx={{ color: 'text.secondary' }}>{idx + 1}</TableCell>
                   <TableCell>
                     <Chip size="small" variant="outlined" label={r.type} />

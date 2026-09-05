@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Paper,
   Stack,
@@ -16,12 +16,24 @@ import { useSettings } from '../context/SettingsContext'
 import { clashApi, ClashApiError } from '../api/clashClient'
 
 export default function SettingsPage() {
-  const { settings, updateSettings } = useSettings()
+  const { settings, updateSettings, secretReady } = useSettings()
   const [form, setForm] = useState(settings)
   const [showSecret, setShowSecret] = useState(false)
   const [testState, setTestState] = useState({ status: 'idle' })
+  const syncedSecretRef = useRef(false)
 
-  const dirty = JSON.stringify(form) !== JSON.stringify(settings)
+  // The stored secret is decrypted asynchronously (Web Crypto + IndexedDB
+  // are async APIs), so it isn't in `settings` yet on first render. Pull it
+  // into the form once it lands, but only if the field is still untouched —
+  // never overwrite something the user has started typing.
+  useEffect(() => {
+    if (secretReady && !syncedSecretRef.current) {
+      syncedSecretRef.current = true
+      setForm((f) => (f.secret ? f : { ...f, secret: settings.secret }))
+    }
+  }, [secretReady, settings.secret])
+
+  const dirty = secretReady && JSON.stringify(form) !== JSON.stringify(settings)
 
   const handleTest = async () => {
     setTestState({ status: 'testing' })
@@ -88,7 +100,11 @@ export default function SettingsPage() {
           />
 
           <Stack direction="row" spacing={1.5}>
-            <Button variant="outlined" onClick={handleTest} disabled={testState.status === 'testing'}>
+            <Button
+              variant="outlined"
+              onClick={handleTest}
+              disabled={testState.status === 'testing' || !secretReady}
+            >
               Test connection
             </Button>
             <Button variant="contained" onClick={handleSave} disabled={!dirty}>

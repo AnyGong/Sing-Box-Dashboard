@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import {
   Table,
   TableHead,
@@ -34,17 +34,26 @@ export default function ConnectionsPage() {
   })
   const [filter, setFilter] = useState('')
   const [closing, setClosing] = useState({})
+  // The filter text itself updates immediately (input stays responsive);
+  // the expensive re-filter of a potentially large connection list is
+  // deferred so React can keep rendering keystrokes at full priority and
+  // catch up the table a beat later, instead of both fighting for the
+  // same frame on every character typed.
+  const deferredFilter = useDeferredValue(filter)
 
-  const connections = (data?.connections || []).filter((c) => {
-    if (!filter) return true
-    const needle = filter.toLowerCase()
-    const host = c.metadata?.host || c.metadata?.destinationIP || ''
-    return (
-      host.toLowerCase().includes(needle) ||
-      (c.chains || []).join(',').toLowerCase().includes(needle) ||
-      (c.rule || '').toLowerCase().includes(needle)
-    )
-  })
+  const connections = useMemo(() => {
+    const list = data?.connections || []
+    if (!deferredFilter) return list
+    const needle = deferredFilter.toLowerCase()
+    return list.filter((c) => {
+      const host = c.metadata?.host || c.metadata?.destinationIP || ''
+      return (
+        host.toLowerCase().includes(needle) ||
+        (c.chains || []).join(',').toLowerCase().includes(needle) ||
+        (c.rule || '').toLowerCase().includes(needle)
+      )
+    })
+  }, [data, deferredFilter])
 
   const closeOne = async (id) => {
     setClosing((c) => ({ ...c, [id]: true }))
@@ -121,7 +130,15 @@ export default function ConnectionsPage() {
             </TableHead>
             <TableBody>
               {connections.map((c) => (
-                <TableRow key={c.id} hover>
+                <TableRow
+                  key={c.id}
+                  hover
+                  // Chrome-native alternative to row virtualization: rows
+                  // scrolled out of view skip layout/style/paint entirely,
+                  // without needing a windowing library, while still
+                  // measuring correctly for scrollbar sizing.
+                  sx={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 37px' }}
+                >
                   <TableCell sx={{ fontFamily: monoFont, fontSize: 12.5 }}>
                     {c.metadata?.host || c.metadata?.destinationIP}
                     {c.metadata?.destinationPort ? `:${c.metadata.destinationPort}` : ''}

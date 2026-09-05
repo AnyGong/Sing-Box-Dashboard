@@ -66,7 +66,7 @@ function ProxyProvidersTable({ providers, onRefresh }) {
         </TableHead>
         <TableBody>
           {entries.map(([name, p]) => (
-            <TableRow key={name} hover>
+            <TableRow key={name} hover sx={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 45px' }}>
               <TableCell sx={{ fontFamily: monoFont, fontSize: 13 }}>{name}</TableCell>
               <TableCell>
                 <Chip size="small" variant="outlined" label={p.vehicleType} />
@@ -129,7 +129,7 @@ function RuleProvidersTable({ providers, onRefresh }) {
         </TableHead>
         <TableBody>
           {entries.map(([name, p]) => (
-            <TableRow key={name} hover>
+            <TableRow key={name} hover sx={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 45px' }}>
               <TableCell sx={{ fontFamily: monoFont, fontSize: 13 }}>{name}</TableCell>
               <TableCell>
                 <Chip size="small" variant="outlined" label={p.behavior} />

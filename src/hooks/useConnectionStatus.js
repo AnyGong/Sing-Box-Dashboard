@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSettings } from '../context/SettingsContext'
 import { clashApi } from '../api/clashClient'
+import { usePageVisibility } from './usePageVisibility'
 
 const PROBE_INTERVAL_MS = 10000
 
@@ -9,19 +10,22 @@ export function useConnectionStatus() {
   const { baseUrl, secret } = settings
   const [status, setStatus] = useState('connecting')
   const [version, setVersion] = useState(null)
+  const visible = usePageVisibility()
 
   useEffect(() => {
+    if (!visible) return undefined
     let cancelled = false
+    const controller = new AbortController()
     setStatus('connecting')
 
     async function probe() {
       try {
-        const v = await clashApi.getVersion({ baseUrl, secret })
+        const v = await clashApi.getVersion({ baseUrl, secret }, { signal: controller.signal })
         if (cancelled) return
         setVersion(v)
         setStatus('connected')
-      } catch {
-        if (!cancelled) setStatus('error')
+      } catch (err) {
+        if (!cancelled && err?.name !== 'AbortError') setStatus('error')
       }
     }
 
@@ -29,9 +33,10 @@ export function useConnectionStatus() {
     const id = setInterval(probe, PROBE_INTERVAL_MS)
     return () => {
       cancelled = true
+      controller.abort()
       clearInterval(id)
     }
-  }, [baseUrl, secret])
+  }, [baseUrl, secret, visible])
 
   return { status, version }
 }

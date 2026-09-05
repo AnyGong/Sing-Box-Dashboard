@@ -43,9 +43,10 @@ and its `secret`, if configured. Example sing-box config:
 
 Because this is a browser app talking directly to `external_controller`,
 make sure sing-box's CORS settings (or a reverse proxy) allow requests from
-wherever you serve this dashboard, and treat the secret as sensitive — it's
-stored only in the browser's `localStorage`, never sent anywhere but your
-configured controller.
+wherever you serve this dashboard. The secret never leaves your browser
+except to your configured controller, and at rest it's encrypted
+(AES-GCM via the Web Crypto API) before being written to `localStorage` —
+see [Storage, performance & efficiency notes](#storage-performance--efficiency-notes) below.
 
 ## Feature map
 
@@ -83,8 +84,49 @@ relevant page will surface the raw error from the controller rather than
 fail silently — check the sing-box version you're running against if a
 request 404s.
 
-## Known limitations of this build environment
+## Storage, performance & efficiency notes
 
-This project was written in an environment without network/npm registry
-access, so `npm install` / `npm run build` have not been executed here.
-Run `npm install && npm run build` locally to verify before deploying.
+The app targets the latest Chrome only (see Stack, above), so it leans on a
+few Chrome-native APIs rather than shipping extra JS to get the same effect:
+
+- **Secret encryption at rest** — the Clash API `secret` is encrypted
+  (AES-GCM) before it's written to `localStorage`. The key itself is
+  generated as `extractable: false` and stored as a `CryptoKey` object in
+  IndexedDB, so the raw key material never exists as bytes you could copy
+  out of devtools or a storage export — only the ciphertext sits in
+  `localStorage`, and the key can only ever be *used* via `SubtleCrypto`,
+  not read. (`src/utils/secretStore.js`) Older saved settings with a
+  plain-text `secret` are migrated to the encrypted form automatically on
+  first load.
+- **Page Visibility–aware polling** — all `setInterval`-based polling
+  (Dashboard stats, Connections, the periodic connection-status probe) pauses
+  while the tab is hidden and immediately refetches the moment it becomes
+  visible again, instead of burning CPU/battery/network in the background
+  and then showing stale numbers for up to a full interval after you tab
+  back in. (`src/hooks/usePageVisibility.js`)
+- **WebSocket auto-reconnect** — the `/logs`, `/traffic`, and `/memory`
+  subscriptions now reconnect with exponential backoff + jitter if the
+  connection drops (e.g. sing-box restarts), instead of sitting in a dead
+  `closed`/`error` state until you navigate away and back.
+  (`src/hooks/useClashWebSocket.js`) The small traffic ticker embedded in
+  the Dashboard also closes its socket while the tab is hidden
+  (`pauseWhenHidden`), since nobody's watching it in the background; the
+  dedicated Logs/Traffic/Memory pages stay connected regardless, since
+  those are meant to be watched continuously.
+- **Request cancellation** — polling requests are wrapped in an
+  `AbortController` so a slow response can't resolve after a newer one and
+  overwrite it with stale data, and in-flight requests are cancelled on
+  unmount/settings change instead of finishing pointlessly.
+- **Responsive filtering** — the Connections and Rules filter inputs use
+  `useDeferredValue` so typing stays snappy even while a large table
+  re-filters behind it, and table rows use CSS `content-visibility: auto`
+  so off-screen rows skip layout/paint work without needing a virtualization
+  library.
+
+## Development notes
+
+`npm install && npm run build && npm run lint` all run clean as of this
+revision (Vite 8 / React 18 / MUI 6). If you hit the opposite of that —
+`npm run lint` failing only *after* you've run a build — check that
+`.eslintignore` exists and excludes `dist/`; the legacy ESLint config used
+here does not respect `.gitignore`.

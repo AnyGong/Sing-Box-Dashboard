@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Grid, Paper, Typography, Stack, Box, Chip } from '@mui/material'
 import { LineChart } from '@mui/x-charts/LineChart'
 import PageHeader from '../components/Common/PageHeader'
@@ -8,7 +9,7 @@ import { clashApi, wsUrl } from '../api/clashClient'
 import { formatBytes, formatBytesPerSec } from '../utils/format'
 import { monoFont } from '../theme'
 
-function StatCard({ label, value, sub }) {
+const StatCard = memo(function StatCard({ label, value, sub }) {
   return (
     <Paper variant="outlined" sx={{ p: 2.5, height: '100%' }}>
       <Typography variant="body2" color="text.secondary">
@@ -24,6 +25,71 @@ function StatCard({ label, value, sub }) {
       )}
     </Paper>
   )
+})
+
+// Owns the /traffic WebSocket subscription. Ticks once a second, so it's
+// pulled out of DashboardPage into its own component — otherwise every
+// message would re-render the whole page, including the three stat cards
+// that only depend on slow polling intervals (15-30s) and have no reason
+// to re-render every second. `pauseWhenHidden` is on here (unlike the
+// dedicated Traffic page) since this is a small decorative ticker nobody
+// is watching while the tab is in the background.
+function TrafficPanel() {
+  const { settings } = useSettings()
+  const trafficUrl = wsUrl(settings, '/traffic')
+  const { items: trafficItems, status: trafficStatus } = useClashWebSocket(trafficUrl, {
+    maxItems: 60,
+    pauseWhenHidden: true,
+  })
+  const latest = trafficItems[trafficItems.length - 1]?.data
+
+  const up = trafficItems.map((i) => i.data?.up ?? 0)
+  const down = trafficItems.map((i) => i.data?.down ?? 0)
+  const xAxisData = trafficItems.map((_, idx) => idx)
+
+  return (
+    <>
+      <Grid item xs={12} sm={6} md={3}>
+        <StatCard
+          label="Current throughput"
+          value={latest ? formatBytesPerSec(latest.up + latest.down) : '—'}
+          sub={latest ? `↑ ${formatBytesPerSec(latest.up)} · ↓ ${formatBytesPerSec(latest.down)}` : trafficStatus}
+        />
+      </Grid>
+
+      <Grid item xs={12}>
+        <Paper variant="outlined" sx={{ p: 2.5 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Traffic (last {trafficItems.length}s)
+            </Typography>
+            <Chip
+              size="small"
+              variant="outlined"
+              label={trafficStatus}
+              color={trafficStatus === 'open' ? 'success' : 'default'}
+            />
+          </Stack>
+          {trafficItems.length > 1 ? (
+            <LineChart
+              height={260}
+              series={[
+                { data: up, label: 'Upload', color: '#2DD4BF', showMark: false },
+                { data: down, label: 'Download', color: '#8B5CF6', showMark: false },
+              ]}
+              xAxis={[{ data: xAxisData, scaleType: 'point', valueFormatter: () => '' }]}
+              yAxis={[{ valueFormatter: (v) => formatBytes(v) }]}
+              slotProps={{ legend: { hidden: false } }}
+            />
+          ) : (
+            <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+              {trafficStatus === 'paused' ? 'Streaming paused (tab hidden)…' : 'Waiting for streaming traffic data…'}
+            </Box>
+          )}
+        </Paper>
+      </Grid>
+    </>
+  )
 }
 
 export default function DashboardPage() {
@@ -33,17 +99,9 @@ export default function DashboardPage() {
   const { data: connections } = useClashResource(clashApi.getConnections, settings, { intervalMs: 5000 })
   const { data: rules } = useClashResource(clashApi.getRules, settings, { intervalMs: 30000 })
 
-  const trafficUrl = wsUrl(settings, '/traffic')
-  const { items: trafficItems, status: trafficStatus } = useClashWebSocket(trafficUrl, { maxItems: 60 })
-  const latest = trafficItems[trafficItems.length - 1]?.data
-
   const proxyCount = proxies ? Object.keys(proxies.proxies || {}).length : '—'
   const connCount = connections ? (connections.connections || []).length : '—'
   const ruleCount = rules ? (rules.rules || []).length : '—'
-
-  const up = trafficItems.map((i) => i.data?.up ?? 0)
-  const down = trafficItems.map((i) => i.data?.down ?? 0)
-  const xAxisData = trafficItems.map((_, idx) => idx)
 
   return (
     <>
@@ -71,45 +129,7 @@ export default function DashboardPage() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard label="Routing rules" value={ruleCount} sub="Loaded from config" />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            label="Current throughput"
-            value={latest ? formatBytesPerSec(latest.up + latest.down) : '—'}
-            sub={latest ? `↑ ${formatBytesPerSec(latest.up)} · ↓ ${formatBytesPerSec(latest.down)}` : trafficStatus}
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                Traffic (last {trafficItems.length}s)
-              </Typography>
-              <Chip
-                size="small"
-                variant="outlined"
-                label={trafficStatus}
-                color={trafficStatus === 'open' ? 'success' : 'default'}
-              />
-            </Stack>
-            {trafficItems.length > 1 ? (
-              <LineChart
-                height={260}
-                series={[
-                  { data: up, label: 'Upload', color: '#2DD4BF', showMark: false },
-                  { data: down, label: 'Download', color: '#8B5CF6', showMark: false },
-                ]}
-                xAxis={[{ data: xAxisData, scaleType: 'point', valueFormatter: () => '' }]}
-                yAxis={[{ valueFormatter: (v) => formatBytes(v) }]}
-                slotProps={{ legend: { hidden: false } }}
-              />
-            ) : (
-              <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
-                Waiting for streaming traffic data…
-              </Box>
-            )}
-          </Paper>
-        </Grid>
+        <TrafficPanel />
       </Grid>
     </>
   )

@@ -19,7 +19,7 @@ function authHeaders(secret) {
   return secret ? { Authorization: `Bearer ${secret}` } : {}
 }
 
-async function request(conn, path, { method = 'GET', query, body } = {}) {
+async function request(conn, path, { method = 'GET', query, body, signal } = {}) {
   const url = new URL(path.replace(/^\//, ''), conn.baseUrl.replace(/\/?$/, '/'))
   if (query) {
     Object.entries(query).forEach(([k, v]) => {
@@ -33,6 +33,11 @@ async function request(conn, path, { method = 'GET', query, body } = {}) {
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal,
+    // These are same-origin-ish local-network calls with no cross-request
+    // caching benefit, and sing-box's Clash API is not designed to be a
+    // cache participant — always get the live state.
+    cache: 'no-store',
   })
   const text = await res.text()
   const data = text ? safeJson(text) : null
@@ -63,11 +68,11 @@ export function wsUrl(conn, path, query = {}) {
 
 export const clashApi = {
   // --- Root / meta -------------------------------------------------
-  hello: (conn) => request(conn, '/'),
-  getVersion: (conn) => request(conn, '/version'),
+  hello: (conn, { signal } = {}) => request(conn, '/', { signal }),
+  getVersion: (conn, { signal } = {}) => request(conn, '/version', { signal }),
 
   // --- Configs -------------------------------------------------------
-  getConfigs: (conn) => request(conn, '/configs'),
+  getConfigs: (conn, { signal } = {}) => request(conn, '/configs', { signal }),
   // Patch a subset of running config (e.g. { "mode": "rule", "log-level": "info" })
   patchConfigs: (conn, patch) => request(conn, '/configs', { method: 'PATCH', body: patch }),
   // Force-reload full config, optionally from a different config file path
@@ -75,7 +80,7 @@ export const clashApi = {
     request(conn, '/configs', { method: 'PUT', query: { force }, body: path ? { path } : {} }),
 
   // --- Proxies ---------------------------------------------------------
-  getProxies: (conn) => request(conn, '/proxies'),
+  getProxies: (conn, { signal } = {}) => request(conn, '/proxies', { signal }),
   getProxy: (conn, name) => request(conn, `/proxies/${encodeURIComponent(name)}`),
   // Select the active member of a selector/url-test/fallback group
   selectProxy: (conn, name, selected) =>
@@ -88,22 +93,22 @@ export const clashApi = {
     request(conn, `/group/${encodeURIComponent(name)}/delay`, { query: { timeout, url } }),
 
   // --- Rules -------------------------------------------------------------
-  getRules: (conn) => request(conn, '/rules'),
+  getRules: (conn, { signal } = {}) => request(conn, '/rules', { signal }),
 
   // --- Providers -----------------------------------------------------
-  getProxyProviders: (conn) => request(conn, '/providers/proxies'),
+  getProxyProviders: (conn, { signal } = {}) => request(conn, '/providers/proxies', { signal }),
   getProxyProvider: (conn, name) => request(conn, `/providers/proxies/${encodeURIComponent(name)}`),
   updateProxyProvider: (conn, name) =>
     request(conn, `/providers/proxies/${encodeURIComponent(name)}`, { method: 'PUT' }),
   healthCheckProxyProvider: (conn, name) =>
     request(conn, `/providers/proxies/${encodeURIComponent(name)}/healthcheck`),
 
-  getRuleProviders: (conn) => request(conn, '/providers/rules'),
+  getRuleProviders: (conn, { signal } = {}) => request(conn, '/providers/rules', { signal }),
   updateRuleProvider: (conn, name) =>
     request(conn, `/providers/rules/${encodeURIComponent(name)}`, { method: 'PUT' }),
 
   // --- Connections ---------------------------------------------------
-  getConnections: (conn) => request(conn, '/connections'),
+  getConnections: (conn, { signal } = {}) => request(conn, '/connections', { signal }),
   closeAllConnections: (conn) => request(conn, '/connections', { method: 'DELETE' }),
   closeConnection: (conn, id) => request(conn, `/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
