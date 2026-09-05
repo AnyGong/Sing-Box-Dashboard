@@ -6,6 +6,7 @@ import { Box, CircularProgress } from '@mui/material'
 import { theme } from './theme'
 import { SettingsProvider } from './context/SettingsContext'
 import { ConnectionStatusProvider } from './context/ConnectionStatusContext'
+import { TrafficStreamProvider } from './context/TrafficStreamContext'
 import AppShell from './components/Layout/AppShell'
 import ErrorBoundary from './components/Common/ErrorBoundary'
 
@@ -44,29 +45,31 @@ export default function App() {
       <ErrorBoundary>
         <SettingsProvider>
           <ConnectionStatusProvider>
-            <BrowserRouter>
-              <AppShell>
-                <Suspense fallback={<RouteFallback />}>
-                  <Routes>
-                    <Route path="/" element={<ActivityPage />} />
-                    <Route path="/overview" element={<OverviewPage />} />
-                    <Route path="/proxies" element={<ProxiesPage />} />
-                    <Route path="/connections" element={<ConnectionsPage />} />
-                    <Route path="/rules" element={<RulesPage />} />
-                    <Route path="/providers" element={<ProvidersPage />} />
-                    <Route path="/logs" element={<LogsPage />} />
-                    <Route path="/traffic" element={<TrafficPage />} />
-                    <Route path="/memory" element={<MemoryPage />} />
-                    <Route path="/dns" element={<DnsPage />} />
-                    <Route path="/cache" element={<CachePage />} />
-                    <Route path="/configs" element={<ConfigsPage />} />
-                    <Route path="/grpc" element={<GrpcPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
-                </Suspense>
-              </AppShell>
-            </BrowserRouter>
+            <TrafficStreamProvider>
+              <BrowserRouter>
+                <AppShell>
+                  <Suspense fallback={<RouteFallback />}>
+                    <Routes>
+                      <Route path="/" element={<ActivityPage />} />
+                      <Route path="/overview" element={<OverviewPage />} />
+                      <Route path="/proxies" element={<ProxiesPage />} />
+                      <Route path="/connections" element={<ConnectionsPage />} />
+                      <Route path="/rules" element={<RulesPage />} />
+                      <Route path="/providers" element={<ProvidersPage />} />
+                      <Route path="/logs" element={<LogsPage />} />
+                      <Route path="/traffic" element={<TrafficPage />} />
+                      <Route path="/memory" element={<MemoryPage />} />
+                      <Route path="/dns" element={<DnsPage />} />
+                      <Route path="/cache" element={<CachePage />} />
+                      <Route path="/configs" element={<ConfigsPage />} />
+                      <Route path="/grpc" element={<GrpcPage />} />
+                      <Route path="/settings" element={<SettingsPage />} />
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </Suspense>
+                </AppShell>
+              </BrowserRouter>
+            </TrafficStreamProvider>
           </ConnectionStatusProvider>
         </SettingsProvider>
       </ErrorBoundary>

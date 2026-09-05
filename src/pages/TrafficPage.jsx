@@ -2,17 +2,33 @@ import { useEffect, useRef, useState } from 'react'
 import { Paper, Stack, Chip, Button, Grid, Typography } from '@mui/material'
 import { LineChart } from '@mui/x-charts/LineChart'
 import PageHeader from '../components/Common/PageHeader'
-import { useSettings } from '../context/SettingsContext'
-import { useClashWebSocket } from '../hooks/useClashWebSocket'
-import { wsUrl } from '../api/clashClient'
+import { useTrafficStream } from '../context/TrafficStreamContext'
 import { formatBytes, formatBytesPerSec } from '../utils/format'
 import { monoFont } from '../theme'
 
 export default function TrafficPage() {
-  const { settings, secretReady } = useSettings()
+  // Reads the single app-wide /traffic subscription (TrafficStreamContext)
+  // instead of opening its own — previously this page's chart reset to
+  // empty every time you navigated here, since it tore down and reopened
+  // its own WebSocket per visit. The shared connection now stays open (and
+  // keeps feeding the daily-totals accumulator on the Activity page) the
+  // whole time the app is open, regardless of which page you're looking at.
+  const { items: liveItems, status } = useTrafficStream()
+
+  // "Pause" used to actually close the socket. Now that the connection is
+  // shared with ActivityPage's sparkline and the daily accumulator, pausing
+  // it here would silently stop their data too — so this instead freezes
+  // only what *this page* is displaying, by snapshotting the buffer at the
+  // moment Pause is clicked and rendering that snapshot until Resume.
   const [paused, setPaused] = useState(false)
-  const url = paused || !secretReady ? null : wsUrl(settings, '/traffic')
-  const { items, status, clear } = useClashWebSocket(url, { maxItems: 300 })
+  const frozenRef = useRef(null)
+  const togglePaused = () => {
+    setPaused((p) => {
+      if (!p) frozenRef.current = liveItems
+      return !p
+    })
+  }
+  const items = paused ? frozenRef.current : liveItems
 
   // `items` is capped at maxItems (~5 min of samples at 1/sec) so the chart
   // stays cheap to render — older samples silently fall out of the array.
@@ -26,7 +42,8 @@ export default function TrafficPage() {
   const lastCountedAtRef = useRef(0)
 
   useEffect(() => {
-    const last = items[items.length - 1]
+    if (paused) return
+    const last = liveItems[liveItems.length - 1]
     if (last && last.at > lastCountedAtRef.current) {
       lastCountedAtRef.current = last.at
       setSessionTotals((t) => ({
@@ -34,18 +51,14 @@ export default function TrafficPage() {
         down: t.down + (last.data?.down || 0),
       }))
     }
-  }, [items])
+  }, [liveItems, paused])
 
-  // A different controller/secret makes any accumulated total meaningless.
-  useEffect(() => {
-    lastCountedAtRef.current = 0
-    setSessionTotals({ up: 0, down: 0 })
-  }, [url])
-
+  // Resets this page's own session counters. Doesn't touch the shared
+  // buffer itself (see the comment on `paused` above) — that's the whole
+  // point of lifting the connection out of this page.
   const resetSession = () => {
     lastCountedAtRef.current = 0
     setSessionTotals({ up: 0, down: 0 })
-    clear()
   }
 
   const latest = items[items.length - 1]?.data
@@ -58,11 +71,11 @@ export default function TrafficPage() {
     <>
       <PageHeader
         title="Traffic"
-        description="Real-time upload/download throughput, sampled once per second from the Clash API's WebSocket /traffic endpoint."
+        description="Real-time upload/download throughput, sampled once per second from the Clash API's WebSocket /traffic endpoint. This stream stays connected in the background (feeding the Activity page's daily total) even while you're on another page."
         actions={
           <Stack direction="row" spacing={1}>
             <Chip size="small" variant="outlined" color={status === 'open' ? 'success' : 'default'} label={status} />
-            <Button size="small" variant="outlined" onClick={() => setPaused((p) => !p)}>
+            <Button size="small" variant="outlined" onClick={togglePaused}>
               {paused ? 'Resume' : 'Pause'}
             </Button>
             <Button size="small" variant="outlined" onClick={resetSession}>

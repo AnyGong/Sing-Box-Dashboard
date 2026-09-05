@@ -20,10 +20,9 @@ import { BarChart } from '@mui/x-charts/BarChart'
 import PageHeader from '../components/Common/PageHeader'
 import { useSettings } from '../context/SettingsContext'
 import { useClashResource } from '../hooks/useClashResource'
-import { useClashWebSocket } from '../hooks/useClashWebSocket'
-import { useDailyTraffic } from '../hooks/useDailyTraffic'
-import { clashApi, wsUrl } from '../api/clashClient'
-import { formatBytes, formatBytesPerSec, formatHourLabel } from '../utils/format'
+import { useTrafficStream } from '../context/TrafficStreamContext'
+import { clashApi } from '../api/clashClient'
+import { formatBytes, formatBytesCompact, formatBytesPerSec, formatHourLabel } from '../utils/format'
 import { useTheme } from '@mui/material/styles'
 import { monoFont } from '../theme'
 
@@ -302,6 +301,14 @@ function topConnectionsBy(connections, keyFn, limit = 5) {
         .slice(0, limit)
 }
 
+// Hour labels never change (pure function of bucket index), but `hourly`
+// gets a new array reference as traffic samples land — computing these from
+// scratch on every render was pure waste; same 24 strings every time.
+const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => formatHourLabel(h))
+// Stable function reference — passing a fresh closure to the chart on every
+// render defeats any memoization x-charts does internally on its own props.
+const everySixthHour = (_, index) => index % 6 === 0
+
 const TrafficCard = memo(function TrafficCard({ hourly, connections }) {
     const theme = useTheme()
     const [scope, setScope] = useState('all')
@@ -342,19 +349,38 @@ const TrafficCard = memo(function TrafficCard({ hourly, connections }) {
             <Box sx={{ height: 130, mx: -1 }}>
                 <BarChart
                     height={130}
-                    series={[{ data: hourly, color: theme.palette.info.light }]}
+                    series={[{ data: hourly, color: theme.palette.info.light, valueFormatter: (v) => formatBytes(v) }]}
                     xAxis={[
                         {
                             scaleType: 'band',
-                            data: hourly.map((_, h) => formatHourLabel(h)),
-                            tickLabelInterval: (_, index) => index % 6 === 0,
+                            data: HOUR_LABELS,
+                            tickLabelInterval: everySixthHour,
                         },
                     ]}
-                    yAxis={[{ position: 'right', valueFormatter: (v) => formatBytes(v), tickNumber: 3 }]}
+                    yAxis={[
+                        {
+                            position: 'right',
+                            // Compact form ("12.3M" instead of "12.3 MB") keeps
+                            // every label within a predictable, narrow width so
+                            // the fixed `margin.right` below is always enough
+                            // room — formatBytes's longer form was overflowing
+                            // that gutter and getting clipped by the chart's
+                            // SVG boundary.
+                            valueFormatter: (v) => formatBytesCompact(v),
+                            tickNumber: 3,
+                        },
+                    ]}
+                    // x-charts doesn't auto-size margins to fit axis label
+                    // content — it needs the gutter reserved explicitly. 40px
+                    // comfortably fits this axis's widest realistic label
+                    // ("999.9G"); the previous unset margin fell back to a
+                    // value too small for anything past a couple of chars.
+                    margin={{ top: 8, right: 40, bottom: 20, left: 4 }}
                     grid={{ horizontal: false, vertical: false }}
                     slotProps={{ legend: { hidden: true } }}
                     sx={{
                         '& .MuiChartsAxis-root .MuiChartsAxis-line': { display: 'none' },
+                        '& .MuiChartsAxis-tickLabel': { fontFamily: monoFont, fontSize: 10.5 },
                         '& .MuiChartsGrid-line': { display: 'none' },
                     }}
                 />
@@ -537,13 +563,16 @@ export default function ActivityPage() {
         enabled: secretReady,
     })
 
-    const trafficUrl = secretReady ? wsUrl(settings, '/traffic') : null
-    const { items: trafficItems } = useClashWebSocket(trafficUrl, {
-        maxItems: 60,
-        pauseWhenHidden: true,
-    })
-
-    const daily = useDailyTraffic(trafficItems)
+    // Reads from the single app-wide /traffic subscription (TrafficStreamContext)
+    // instead of opening its own — previously this page's sparkline (and the
+    // daily accumulator it drives) reset to empty every time you navigated
+    // here, since it tore down and reopened its own WebSocket per visit.
+    // Only the most recent 60 samples are used for the sparkline itself; the
+    // shared buffer retains more (for the dedicated Traffic page's fuller
+    // chart) but this card was always meant to show "the last minute", not
+    // everything the shared buffer happens to be holding.
+    const { items: allTrafficItems, daily } = useTrafficStream()
+    const trafficItems = allTrafficItems.slice(-60)
 
     // Session peak/average for the UPLOAD and DOWNLOAD cards, derived from
     // the same /traffic samples as the sparkline. `trafficItems` is a capped

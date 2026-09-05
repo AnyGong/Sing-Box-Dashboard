@@ -11,6 +11,22 @@ export function formatBytesPerSec(bytes) {
   return `${formatBytes(bytes)}/s`
 }
 
+// Compact form for space-constrained UI like a chart axis tick: no space
+// before the unit, and the unit drops the trailing "B" (the common K/M/G/T
+// shorthand for byte scales), so a label never exceeds ~5-6 characters
+// regardless of magnitude. formatBytes's own output ("12.3 MB", "1.5 GB")
+// is fine in a stat card with room to breathe, but on a right-side chart
+// axis with a fixed margin it was running wider than the reserved gutter
+// and getting clipped by the chart's SVG boundary.
+export function formatBytesCompact(bytes) {
+  if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return '—'
+  if (bytes === 0) return '0'
+  const units = ['', 'K', 'M', 'G', 'T', 'P']
+  const exp = Math.min(Math.floor(Math.log(Math.abs(bytes)) / Math.log(1024)), units.length - 1)
+  const value = bytes / 1024 ** exp
+  return `${value.toFixed(exp === 0 ? 0 : 1)}${units[exp]}`
+}
+
 export function formatDuration(ms) {
   if (!ms || ms < 0) return '0s'
   const s = Math.floor(ms / 1000)
