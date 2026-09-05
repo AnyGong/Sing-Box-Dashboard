@@ -1,4 +1,4 @@
-import { useState, memo } from 'react'
+import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import {
     Grid,
     Paper,
@@ -60,17 +60,34 @@ function ValueUnit({ value, unit, variant = 'h4', unitVariant = 'h6', sx }) {
 // ---------------------------------------------------------------------------
 // Top meta row: NETWORK / PROFILE / OUTBOUND MODE / EXTERNAL IP
 // ---------------------------------------------------------------------------
-function MetaInfoRow() {
+// OUTBOUND MODE reflects the live `mode` field from GET /configs (see
+// MODE_LABELS below) — sing-box actually reports this, so it's no longer a
+// placeholder. NETWORK, PROFILE, and EXTERNAL IP still have no equivalent
+// anywhere in the Clash API and stay as placeholders: a browser page has no
+// way to read the host's network name, host OS, or true egress IP. (A local
+// companion agent running on the sing-box host could supply all three —
+// that's a separate, opt-in follow-up, not something reachable from here.)
+const MODE_LABELS = {
+    rule: 'Rule-Based Proxy',
+    global: 'Global',
+    direct: 'Direct',
+}
+
+function MetaInfoRow({ mode }) {
     // Only the IP is a technical/numeric value — it gets the monospace
     // treatment. The rest (Home, macOS, Rule-Based Proxy) are plain words and
     // should sit in the regular UI font, matching the reference.
-    // Dummy preview values below (the IP) stand in for fields the sing-box
-    // Clash API doesn't expose, so the page reads like the reference at a
-    // glance instead of showing a dash.
+    // NETWORK / PROFILE / EXTERNAL IP remain dummy preview values — the
+    // sing-box Clash API doesn't expose any of them, so the page reads like
+    // the reference at a glance instead of showing a dash. OUTBOUND MODE is
+    // real now (see MODE_LABELS above).
     const items = [
         { label: 'NETWORK', value: 'Home' },
         { label: 'PROFILE', value: 'macOS' },
-        { label: 'OUTBOUND MODE', value: 'Rule-Based Proxy' },
+        {
+            label: 'OUTBOUND MODE',
+            value: mode ? MODE_LABELS[String(mode).toLowerCase()] || String(mode) : NA,
+        },
         { label: 'EXTERNAL IP', value: '203.0.113.1', mono: true },
     ]
     return (
@@ -140,9 +157,11 @@ function InternetLatencyCard() {
 // ---------------------------------------------------------------------------
 const ThroughputCard = memo(function ThroughputCard({ label, value, data, color, peak = NA, avg = NA }) {
     const [num, unit] = splitValueUnit(value)
-    // peak/avg are placeholders today (no source in the Clash API), but they
-    // still carry the card's own unit so the corner text reads "— KB/s"
-    // rather than an unadorned dash.
+    // peak/avg are now computed from the same /traffic WebSocket samples
+    // already driving the sparkline (see the session peak/average tracker in
+    // ActivityPage below) — the NA fallback here just keeps the corner text
+    // reading "— KB/s" instead of an unadorned dash for the brief window
+    // before the first sample arrives.
     const peakText = peak === NA ? `${NA} ${unit}` : peak
     const avgText = avg === NA ? `${NA} ${unit}` : avg
 
@@ -228,45 +247,58 @@ function ActiveConnectionCard({ count }) {
 // ---------------------------------------------------------------------------
 // TRAFFIC card — ALL/PROXY toggle + 24h bars + CLIENT/DOMAIN/POLICY list
 // ---------------------------------------------------------------------------
+// Groups currently-tracked connections by a per-tab key and sums each
+// group's upload+download — real numbers straight from the same
+// GET /connections payload the CLIENT tab always used, just grouped
+// differently per tab instead of two of the three being mock datasets.
+//
+// The one honest caveat, inherited from /connections itself: this only
+// covers connections the controller is tracking *right now*. A connection
+// that opens and fully closes between two 5s polls never contributes here,
+// so — like useDailyTraffic's daily tally — this is a live snapshot, not a
+// complete historical ledger.
+const TRAFFIC_GROUP_KEY = {
+    // sing-box's Clash API reports this field as `processPath`, not
+    // `process` (confirmed against sing-box's own
+    // experimental/clashapi/trafficontrol/tracker.go) — the previous
+    // `c.metadata?.process` lookup here never matched anything and silently
+    // fell through to host/IP on every connection.
+    client: (c) => c.metadata?.processPath || c.metadata?.host || c.metadata?.destinationIP,
+    domain: (c) => c.metadata?.host || c.metadata?.destinationIP,
+    // chains[0] is the outbound sing-box actually routed through (e.g.
+    // "DIRECT", "REJECT", or a proxy/selector name) — the same field the
+    // Connections page's Chain column already reads.
+    policy: (c) => c.chains?.[0],
+}
+
+function topConnectionsBy(connections, keyFn, limit = 5) {
+    const totals = new Map()
+    ;(connections?.connections || []).forEach((c) => {
+        const key = keyFn(c) || 'unknown'
+        const total = (c.upload || 0) + (c.download || 0)
+        totals.set(key, (totals.get(key) || 0) + total)
+    })
+    return Array.from(totals, ([label, total]) => ({ id: label, label, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, limit)
+}
+
 const TrafficCard = memo(function TrafficCard({ hourly, connections }) {
     const theme = useTheme()
     const [scope, setScope] = useState('all')
     const [tab, setTab] = useState('client')
 
-    const top = (connections?.connections || [])
-        .map((c) => ({
-            id: c.id,
-            label: c.metadata?.process || c.metadata?.host || c.metadata?.destinationIP || 'unknown',
-            total: (c.upload || 0) + (c.download || 0),
-        }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 5)
-
-    // Dummy preview values — sing-box's Clash API doesn't expose a per-domain
-    // or per-policy breakdown, so these stand in for the real numbers until
-    // that source exists. The CLIENT tab above uses live connection data.
-    const domainMock = [
-        { id: 'd1', label: 'youtube.com', total: 96 * 1024 * 1024 },
-        { id: 'd2', label: 'github.com', total: 54 * 1024 * 1024 },
-        { id: 'd3', label: 'api.anthropic.com', total: 41 * 1024 * 1024 },
-        { id: 'd4', label: 'dropbox.com', total: 22 * 1024 * 1024 },
-        { id: 'd5', label: 'telegram.org', total: 14 * 1024 * 1024 },
-    ]
-    const policyMock = [
-        { id: 'p1', label: 'PROXY', total: 551 * 1024 * 1024 },
-        { id: 'p2', label: 'DIRECT', total: 178 * 1024 * 1024 },
-        { id: 'p3', label: 'REJECT', total: 3 * 1024 * 1024 },
-    ]
-    const list = tab === 'client' ? top : tab === 'domain' ? domainMock : policyMock
+    const list = useMemo(() => topConnectionsBy(connections, TRAFFIC_GROUP_KEY[tab]), [connections, tab])
     const max = list[0]?.total || 1
 
-    // Always render exactly 5 row slots — CLIENT can have 0-5 real
-    // connections while DOMAIN/POLICY carry fixed-length mock data (5 and 3
-    // items), so without padding the list's rendered height changes with
-    // the tab, which reflows this card's height and the whole row next to
-    // it. Padding with same-markup placeholder rows (hidden, not removed)
-    // keeps the height constant using the real row height rather than a
-    // guessed pixel value.
+    // Always render exactly 5 row slots — every tab now sources from
+    // topConnectionsBy(), which returns 0-5 groups depending on how many
+    // distinct processes/hosts/outbounds are actually active, so without
+    // padding the list's rendered height changes with the tab and the
+    // connection count, reflowing this card's height and the whole row next
+    // to it. Padding with same-markup placeholder rows (hidden, not
+    // removed) keeps the height constant using the real row height rather
+    // than a guessed pixel value.
     const ROW_COUNT = 5
     const rows = Array.from({ length: ROW_COUNT }, (_, i) => list[i] ?? null)
 
@@ -383,13 +415,16 @@ const TrafficCard = memo(function TrafficCard({ hourly, connections }) {
 })
 
 // ---------------------------------------------------------------------------
-// TOTAL TRAFFIC card — total + TODAY/MONTH + DIRECT/PROXY bar
+// TOTAL TRAFFIC card — total + TOTAL/MONTH + DIRECT/PROXY bar
 // ---------------------------------------------------------------------------
 function TotalTrafficCard({ total }) {
     const [range, setRange] = useState('today')
-    // Dummy preview values — sing-box's Clash API doesn't expose a
-    // direct/proxy traffic split or a monthly total, so these stand in for
-    // the real numbers until that source exists.
+    // DIRECT/PROXY split stays a dummy preview value — sing-box's Clash API
+    // exposes no per-outbound breakdown of the cumulative total below (only
+    // per-connection `chains`, which is what the TRAFFIC card's POLICY tab
+    // uses instead, scoped to currently-tracked connections). MONTH is a
+    // dummy preview value too — no sing-box endpoint reports a rolling
+    // monthly total.
     const directMB = 178
     const proxyMB = 551
     const directPct = (directMB / (directMB + proxyMB)) * 100
@@ -406,7 +441,7 @@ function TotalTrafficCard({ total }) {
                     onChange={(_, v) => v && setRange(v)}
                     sx={{ minWidth: 130 }}
                 >
-                    <ToggleButton value="today">TODAY</ToggleButton>
+                    <ToggleButton value="today">TOTAL</ToggleButton>
                     <ToggleButton value="month">MONTH</ToggleButton>
                 </ToggleButtonGroup>
             </Stack>
@@ -414,13 +449,27 @@ function TotalTrafficCard({ total }) {
             {(() => {
                 const [totalNum, totalUnit] = range === 'today' ? splitValueUnit(formatBytes(total)) : ['18.4', 'GB']
                 return (
-                    <ValueUnit
-                        value={totalNum}
-                        unit={totalUnit}
-                        variant="h4"
-                        unitVariant="h6"
-                        sx={{ mt: 1, mb: 'auto', alignSelf: 'flex-start' }}
-                    />
+                    <Box sx={{ mb: 'auto' }}>
+                        <ValueUnit
+                            value={totalNum}
+                            unit={totalUnit}
+                            variant="h4"
+                            unitVariant="h6"
+                            sx={{ mt: 1, alignSelf: 'flex-start' }}
+                        />
+                        {/* `total` now comes from GET /connections'
+                            uploadTotal/downloadTotal — sing-box's own
+                            cumulative counters, more authoritative than
+                            tallying /traffic samples client-side (as this
+                            card did before). It resets when sing-box
+                            restarts rather than at local midnight, so the
+                            toggle reads TOTAL rather than TODAY. */}
+                        {range === 'today' && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                Since sing-box was last started
+                            </Typography>
+                        )}
+                    </Box>
                 )
             })()}
 
@@ -462,6 +511,13 @@ export default function ActivityPage() {
         enabled: secretReady,
     })
 
+    // Only used for the OUTBOUND MODE field in MetaInfoRow — ConfigsPage
+    // polls the same endpoint for its own (editable) copy; this is kept as a
+    // separate, read-only fetch so the two pages don't share poll timing.
+    const { data: configs } = useClashResource(clashApi.getConfigs, settings, {
+        enabled: secretReady,
+    })
+
     const trafficUrl = secretReady ? wsUrl(settings, '/traffic') : null
     const { items: trafficItems } = useClashWebSocket(trafficUrl, {
         maxItems: 60,
@@ -470,10 +526,40 @@ export default function ActivityPage() {
 
     const daily = useDailyTraffic(trafficItems)
 
+    // Session peak/average for the UPLOAD and DOWNLOAD cards, derived from
+    // the same /traffic samples as the sparkline. `trafficItems` is a capped
+    // ring buffer (maxItems: 60 above), so peak/average can't be computed
+    // from whatever's currently in it — that would silently forget a spike,
+    // or skew the average, once older samples fall out of the buffer.
+    // Folding each sample in by its timestamp (not array position) exactly
+    // once is the same technique useDailyTraffic and TrafficPage's session
+    // totals both already use.
+    const [throughputStats, setThroughputStats] = useState({ peakUp: 0, peakDown: 0, sumUp: 0, sumDown: 0, count: 0 })
+    const lastThroughputAtRef = useRef(0)
+    useEffect(() => {
+        const last = trafficItems[trafficItems.length - 1]
+        if (!last || last.at <= lastThroughputAtRef.current) return
+        lastThroughputAtRef.current = last.at
+        const up = last.data?.up || 0
+        const down = last.data?.down || 0
+        setThroughputStats((s) => ({
+            peakUp: Math.max(s.peakUp, up),
+            peakDown: Math.max(s.peakDown, down),
+            sumUp: s.sumUp + up,
+            sumDown: s.sumDown + down,
+            count: s.count + 1,
+        }))
+    }, [trafficItems])
+
     const connCount = connections ? (connections.connections || []).length : NA
     const latestTraffic = trafficItems[trafficItems.length - 1]?.data
     const up = trafficItems.map((i) => i.data?.up ?? 0)
     const down = trafficItems.map((i) => i.data?.down ?? 0)
+    // GET /connections reports its own cumulative uploadTotal/downloadTotal
+    // (sing-box's traffic manager tracks these itself) — more authoritative
+    // than tallying /traffic samples client-side. See the caption
+    // TotalTrafficCard renders alongside it for the reset-boundary caveat.
+    const totalTraffic = (connections?.uploadTotal || 0) + (connections?.downloadTotal || 0)
 
     return (
         <>
@@ -482,7 +568,7 @@ export default function ActivityPage() {
                 description="A live snapshot of the sing-box core reachable at the configured Clash API address."
             />
 
-            <MetaInfoRow />
+            <MetaInfoRow mode={configs?.mode} />
 
             <Grid container spacing={2.5}>
                 {/* Row 1: latency + upload + download — Grid's default stretch
@@ -496,8 +582,8 @@ export default function ActivityPage() {
                         value={formatBytesPerSec(latestTraffic?.up ?? 0)}
                         data={up}
                         color={theme.palette.secondary.main}
-                        peak="2.0 MB/s"
-                        avg="1.0 MB/s"
+                        peak={formatBytesPerSec(throughputStats.peakUp)}
+                        avg={formatBytesPerSec(throughputStats.sumUp / (throughputStats.count || 1))}
                     />
                 </Grid>
                 <Grid item xs={6} md={3} sx={{ display: 'flex' }}>
@@ -506,8 +592,8 @@ export default function ActivityPage() {
                         value={formatBytesPerSec(latestTraffic?.down ?? 0)}
                         data={down}
                         color={theme.palette.info.main}
-                        peak="18.5 MB/s"
-                        avg="9.2 MB/s"
+                        peak={formatBytesPerSec(throughputStats.peakDown)}
+                        avg={formatBytesPerSec(throughputStats.sumDown / (throughputStats.count || 1))}
                     />
                 </Grid>
 
@@ -515,7 +601,7 @@ export default function ActivityPage() {
                 <Grid item xs={12} md={6}>
                     <Stack spacing={2.5} sx={{ height: '100%' }}>
                         <ActiveConnectionCard count={connCount} />
-                        <TotalTrafficCard total={daily.up + daily.down} />
+                        <TotalTrafficCard total={totalTraffic} />
                     </Stack>
                 </Grid>
                 <Grid item xs={12} md={6} sx={{ display: 'flex' }}>
