@@ -8,10 +8,10 @@ export default function NotFoundPage() {
         404
       </Typography>
       <Typography color="text.secondary" sx={{ mb: 3 }}>
-        This route doesn't exist in the control panel.
+        This route doesn&apos;t exist in the control panel.
       </Typography>
       <Button component={Link} to="/" variant="contained">
-        Back to dashboard
+        Back to Activity
       </Button>
     </Box>
   )

@@ -31,6 +31,15 @@ export function relativeTime(fromMs) {
   return formatDuration(diff) + ' ago'
 }
 
+// Labels an hour-of-day bucket (0-23) as e.g. "12AM", "6AM", "12PM" — used
+// by the Activity page's hourly traffic history chart.
+export function formatHourLabel(hour) {
+  const h = ((hour % 24) + 24) % 24
+  const period = h < 12 ? 'AM' : 'PM'
+  const display = h % 12 === 0 ? 12 : h % 12
+  return `${display}${period}`
+}
+
 export function safeConnStarted(startedIso) {
   const t = Date.parse(startedIso)
   if (Number.isNaN(t)) return '—'

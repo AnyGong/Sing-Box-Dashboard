@@ -8,7 +8,7 @@ const PROBE_INTERVAL_MS = 10000
 const ConnectionStatusContext = createContext(null)
 
 // A single, app-wide /version probe. Previously AppShell polled /version
-// every 10s for the header's status chip *and* DashboardPage separately
+// every 10s for the header's status chip *and* ActivityPage separately
 // polled the same endpoint every 30s for its version chip — two independent
 // pollers hitting the controller for the same data whenever the dashboard
 // route was open. Lifting this into one provider means every consumer reads

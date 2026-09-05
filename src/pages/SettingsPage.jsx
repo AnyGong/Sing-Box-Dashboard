@@ -8,18 +8,24 @@ import {
   Divider,
   InputAdornment,
   IconButton,
+  Typography,
 } from '@mui/material'
 import VisibilityIcon from '@mui/icons-material/VisibilityOutlined'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOffOutlined'
+import DeleteForeverIcon from '@mui/icons-material/DeleteForeverOutlined'
 import PageHeader from '../components/Common/PageHeader'
+import ConfirmDialog from '../components/Common/ConfirmDialog'
 import { useSettings } from '../context/SettingsContext'
 import { clashApi, ClashApiError } from '../api/clashClient'
+import { hardReset } from '../utils/hardReset'
 
 export default function SettingsPage() {
   const { settings, updateSettings, secretReady } = useSettings()
   const [form, setForm] = useState(settings)
   const [showSecret, setShowSecret] = useState(false)
   const [testState, setTestState] = useState({ status: 'idle' })
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const syncedSecretRef = useRef(false)
 
   // The stored secret is decrypted asynchronously (Web Crypto + IndexedDB
@@ -52,6 +58,14 @@ export default function SettingsPage() {
   const handleSave = () => {
     updateSettings(form)
     setTestState({ status: 'idle' })
+  }
+
+  // Doesn't close/hide the dialog on completion — hardReset() ends in
+  // window.location.reload(), which tears down this component (and every
+  // other bit of app state) before there'd be another render to show.
+  const handleHardReset = async () => {
+    setResetting(true)
+    await hardReset(secretReady ? settings : null)
   }
 
   return (
@@ -123,6 +137,36 @@ export default function SettingsPage() {
           )}
         </Stack>
       </Paper>
+
+      <Paper variant="outlined" sx={{ p: 3, mt: 3, maxWidth: 560, borderColor: 'error.main' }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+          Danger zone
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Closes every connection the controller is currently tracking, then wipes everything this
+          dashboard has stored in this browser — saved settings (including this secret), the
+          encrypted-key store, and any cached data — and reloads the page from scratch. This
+          cannot be undone; you'll need to re-enter your controller address and secret afterward.
+        </Typography>
+        <Button
+          variant="outlined"
+          color="error"
+          startIcon={<DeleteForeverIcon />}
+          onClick={() => setResetOpen(true)}
+        >
+          Clear all data &amp; reload
+        </Button>
+      </Paper>
+
+      <ConfirmDialog
+        open={resetOpen}
+        title="Clear all data and reload?"
+        description="This closes all tracked connections and permanently erases every saved setting, secret, and cached value this dashboard has stored in this browser, then reloads the page. This cannot be undone."
+        confirmLabel="Clear everything"
+        busy={resetting}
+        onConfirm={handleHardReset}
+        onClose={() => setResetOpen(false)}
+      />
     </>
   )
 }

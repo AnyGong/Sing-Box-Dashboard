@@ -16,7 +16,8 @@ import {
   useMediaQuery,
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
-import DashboardIcon from '@mui/icons-material/SpeedOutlined'
+import ActivityIcon from '@mui/icons-material/MonitorHeartOutlined'
+import OverviewIcon from '@mui/icons-material/GridViewOutlined'
 import HubIcon from '@mui/icons-material/HubOutlined'
 import RouteIcon from '@mui/icons-material/AltRouteOutlined'
 import RuleIcon from '@mui/icons-material/RuleOutlined'
@@ -35,8 +36,11 @@ const DRAWER_WIDTH = 248
 
 const NAV_SECTIONS = [
   {
-    label: 'Overview',
-    items: [{ to: '/', label: 'Dashboard', icon: <DashboardIcon /> }],
+    label: null,
+    items: [
+      { to: '/', label: 'Activity', icon: <ActivityIcon /> },
+      { to: '/overview', label: 'Overview', icon: <OverviewIcon /> },
+    ],
   },
   {
     label: 'Routing',
@@ -70,15 +74,17 @@ const NAV_SECTIONS = [
 function NavList({ onNavigate }) {
   const location = useLocation()
   return (
-    <Box sx={{ overflowY: 'auto', py: 1 }}>
+    <Box sx={{ overflowY: 'auto', py: 1, flex: 1 }}>
       {NAV_SECTIONS.map((section) => (
-        <Box key={section.label} sx={{ mb: 1 }}>
-          <Typography
-            variant="caption"
-            sx={{ px: 2.5, py: 0.5, display: 'block', color: 'text.secondary', fontWeight: 700 }}
-          >
-            {section.label}
-          </Typography>
+        <Box key={section.label ?? section.items[0].to} sx={{ mb: 1 }}>
+          {section.label && (
+            <Typography
+              variant="caption"
+              sx={{ px: 2.5, py: 0.5, display: 'block', color: 'text.secondary', fontWeight: 700 }}
+            >
+              {section.label}
+            </Typography>
+          )}
           <List dense disablePadding>
             {section.items.map((item) => (
               <ListItemButton
@@ -103,7 +109,7 @@ function NavList({ onNavigate }) {
 export default function AppShell({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const isUpMd = useMediaQuery('(min-width:900px)')
-  const { status } = useConnectionStatus()
+  const { status, version } = useConnectionStatus()
 
   const statusMeta = {
     connected: { color: 'success', label: 'Connected' },
@@ -134,9 +140,51 @@ export default function AppShell({ children }) {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, flexGrow: 1 }}>
-            sing-box Control Panel
-          </Typography>
+
+          {/* Reference Activity top-bar: a neutral "NO EVENT" pill on the
+              left, then "System Proxy" / "Enhanced Mode" indicator pills on
+              the right. All three are UI placeholders — the sing-box Clash
+              API has no equivalent event-bus or system-proxy state — so the
+              chrome stays in place but values are static labels. */}
+          <Chip
+            size="small"
+            label="NO EVENT"
+            sx={{
+              borderRadius: 4,
+              fontWeight: 700,
+              letterSpacing: 0.04,
+              bgcolor: 'action.hover',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          />
+
+          <Box sx={{ flexGrow: 1 }} />
+
+          <Chip
+            size="small"
+            label="System Proxy"
+            icon={<Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.light' }} />}
+            sx={{
+              borderRadius: 4,
+              bgcolor: 'action.hover',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          />
+          <Chip
+            size="small"
+            label="Enhanced Mode"
+            icon={<Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.light' }} />}
+            sx={{
+              borderRadius: 4,
+              bgcolor: 'action.hover',
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          />
+
+          {/* Original right-most connection status chip — preserved. */}
           <Chip size="small" color={statusMeta.color} label={statusMeta.label} variant="outlined" />
         </Toolbar>
       </AppBar>
@@ -156,7 +204,7 @@ export default function AppShell({ children }) {
           variant="permanent"
           sx={{
             display: { xs: 'none', md: 'block' },
-            '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box', borderRight: '1px solid', borderColor: 'divider' },
+            '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box', borderRight: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column' },
           }}
           open
         >
@@ -172,6 +220,16 @@ export default function AppShell({ children }) {
           </Toolbar>
           <Divider />
           {drawer}
+          <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+            {version && (
+              <Chip
+                size="small"
+                icon={<img src="/assets/icon.svg" alt="" style={{ width: 16, height: 16 }} />}
+                label={version.version.replace(/^sing-box\s+/i, '')}
+                sx={{ fontSize: 11, height: 24 }}
+              />
+            )}
+          </Box>
         </Drawer>
       </Box>
 

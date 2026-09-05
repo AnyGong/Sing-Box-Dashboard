@@ -4,20 +4,40 @@ import { usePageVisibility } from './usePageVisibility'
 const BASE_RECONNECT_DELAY_MS = 1000
 const MAX_RECONNECT_DELAY_MS = 15000
 
-// Closing a socket while it's still CONNECTING is what makes Chrome log
-// "WebSocket is closed before the connection is established" — harmless,
-// but noisy, and it fires on every unmount/route change/dependency change
-// (including React StrictMode's intentional dev-mode double-invoke of
-// effects). Deferring the close until the socket actually reaches OPEN
-// (or just dropping it if it never does, e.g. it errors out first) avoids
-// the warning entirely without changing any observable behavior.
+// Always close immediately, even mid-handshake (readyState === CONNECTING).
+//
+// A previous version of this deferred the close until the socket reached
+// OPEN, purely to silence Chrome's harmless "WebSocket is closed before the
+// connection is established" console warning. That deferral is what was
+// actually causing both the long "Waiting for streaming traffic data" stall
+// and the eventual tab crash on long-running dev sessions: every unmount,
+// route change, settings change, or (in dev) React StrictMode's intentional
+// double-invoke of effects — plus the Activity traffic ticker's
+// `pauseWhenHidden` reconnect firing on every tab switch — left one of
+// these half-open sockets alive until its handshake finished, instead of
+// aborting it right away. Each dangling handshake counts against the
+// browser's shared pool of pending WebSocket connections, so over a long
+// session they pile up and *new* connection attempts (e.g. reopening the
+// Traffic page) have to queue behind a growing backlog of zombie handshakes
+// before they can even start — that's the slow "waiting for data" symptom.
+// The accumulated socket objects, each still holding its
+// onopen/onmessage/onerror/onclose closures, are what eventually balloon
+// memory enough to crash the tab.
+//
+// Closing immediately aborts the in-flight handshake and frees the slot
+// right away. Nulling the handlers first means nothing fires (and nothing
+// is retained) after we've decided to tear this socket down — this also
+// guarantees an intentional close here never schedules a reconnect via
+// onclose, without depending solely on the `cancelled` flag captured in
+// each handler's closure. The console warning this reintroduces is
+// cosmetic only.
 function closeSocket(socket) {
   if (!socket) return
-  if (socket.readyState === WebSocket.CONNECTING) {
-    socket.addEventListener('open', () => socket.close())
-  } else {
-    socket.close()
-  }
+  socket.onopen = null
+  socket.onmessage = null
+  socket.onerror = null
+  socket.onclose = null
+  socket.close()
 }
 
 /**
@@ -38,7 +58,7 @@ function closeSocket(socket) {
  *   Logs/Traffic/Memory are dedicated "watch this stream" pages where a
  *   background tab is often still an active monitor (e.g. on a second
  *   screen); turn it on for incidental/decorative subscriptions, like the
- *   small traffic ticker on the Dashboard, where nobody is watching while
+ *   small traffic ticker on the Activity page, where nobody is watching while
  *   hidden and keeping the socket open just burns battery/network.
  */
 export function useClashWebSocket(url, { maxItems = 200, pauseWhenHidden = false } = {}) {

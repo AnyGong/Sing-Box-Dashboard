@@ -52,7 +52,7 @@ see [Storage, performance & efficiency notes](#storage-performance--efficiency-n
 
 | Area | Clash API endpoints | UI pattern |
 |---|---|---|
-| Dashboard | `/version`, `/proxies`, `/connections`, `/rules`, `/traffic` (ws) | stat cards + live chart |
+| Activity | `/version`, `/proxies`, `/connections`, `/rules`, `/traffic` (ws) | stat cards + live chart |
 | Proxies | `GET/PUT /proxies`, `/proxies/:name/delay`, `/group/:name/delay` | grouped tables with single-select radios (selector groups) + latency test actions |
 | Connections | `GET/DELETE /connections`, `DELETE /connections/:id` | live table with per-row and bulk close actions |
 | Rules | `GET /rules` | searchable table |
@@ -99,7 +99,7 @@ few Chrome-native APIs rather than shipping extra JS to get the same effect:
   plain-text `secret` are migrated to the encrypted form automatically on
   first load.
 - **Page Visibility–aware polling** — all `setInterval`-based polling
-  (Dashboard stats, Connections, the periodic connection-status probe) pauses
+  (Activity stats, Connections, the periodic connection-status probe) pauses
   while the tab is hidden and immediately refetches the moment it becomes
   visible again, instead of burning CPU/battery/network in the background
   and then showing stale numbers for up to a full interval after you tab
@@ -109,7 +109,7 @@ few Chrome-native APIs rather than shipping extra JS to get the same effect:
   connection drops (e.g. sing-box restarts), instead of sitting in a dead
   `closed`/`error` state until you navigate away and back.
   (`src/hooks/useClashWebSocket.js`) The small traffic ticker embedded in
-  the Dashboard also closes its socket while the tab is hidden
+  the Activity page also closes its socket while the tab is hidden
   (`pauseWhenHidden`), since nobody's watching it in the background; the
   dedicated Logs/Traffic/Memory pages stay connected regardless, since
   those are meant to be watched continuously.

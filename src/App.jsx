@@ -10,10 +10,11 @@ import AppShell from './components/Layout/AppShell'
 import ErrorBoundary from './components/Common/ErrorBoundary'
 
 // Each page is its own chunk instead of one ~750KB bundle: @mui/x-charts
-// (only used by Dashboard/Traffic/Memory) and every other page's code no
+// (only used by Activity/Traffic/Memory) and every other page's code no
 // longer has to download before someone who only ever opens Settings sees
 // anything.
-const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const ActivityPage = lazy(() => import('./pages/ActivityPage'))
+const OverviewPage = lazy(() => import('./pages/OverviewPage'))
 const ProxiesPage = lazy(() => import('./pages/ProxiesPage'))
 const ConnectionsPage = lazy(() => import('./pages/ConnectionsPage'))
 const RulesPage = lazy(() => import('./pages/RulesPage'))
@@ -47,7 +48,8 @@ export default function App() {
               <AppShell>
                 <Suspense fallback={<RouteFallback />}>
                   <Routes>
-                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/" element={<ActivityPage />} />
+                    <Route path="/overview" element={<OverviewPage />} />
                     <Route path="/proxies" element={<ProxiesPage />} />
                     <Route path="/connections" element={<ConnectionsPage />} />
                     <Route path="/rules" element={<RulesPage />} />
